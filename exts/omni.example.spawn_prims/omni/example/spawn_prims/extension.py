@@ -22,12 +22,13 @@ class PrimsExtension(omni.ext.IExt):
         if self._stage == None:
             self._stage = omni.usd.get_context().get_stage()
             print("stage", self._stage)
+            self.create_materials()            
 
     def make_preview_surface_tex_material(self, fname):
         # This is all materials
         matpath = "/World/Looks"
-        matname =  f'{matpath}/boardMat_{fname.replace(".","_")}'
-        material = UsdShade.Material.Define(self._stage,matname)
+        matname = f'{matpath}/boardMat_{fname.replace(".","_")}'
+        material = UsdShade.Material.Define(self._stage, matname)
         pbrShader = UsdShade.Shader.Define(self._stage, f'{matname}/PBRShader')
         pbrShader.CreateIdAttr("UsdPreviewSurface")
         pbrShader.CreateInput("roughness", Sdf.ValueTypeNames.Float).Set(0.4)
@@ -37,7 +38,7 @@ class PrimsExtension(omni.ext.IExt):
         stReader = UsdShade.Shader.Define(self._stage, f'{matpath}/stReader')
         stReader.CreateIdAttr('UsdPrimvarReader_float2')
 
-        diffuseTextureSampler = UsdShade.Shader.Define(self._stage,f'{matpath}/diffuseTexture')
+        diffuseTextureSampler = UsdShade.Shader.Define(self._stage, f'{matpath}/diffuseTexture')
         diffuseTextureSampler.CreateIdAttr('UsdUVTexture')
         ASSETS_DIRECTORY = os.path.dirname(os.path.realpath(__file__))
         print(f"ASSETS_DIRECTORY {ASSETS_DIRECTORY}")                    
@@ -83,8 +84,8 @@ class PrimsExtension(omni.ext.IExt):
     def on_startup(self, ext_id):
         print("[omni.example.spawn_prims] omni example spawn_prims startup <<<<<<<<<<<<<<<<<")
         self._count = 0
-        self._current_material = "sunset_texture"
-        self.create_materials()
+        self._current_material = "blue"
+
 
         self._window = ui.Window("Spawn Primitives", width=300, height=300)
         with self._window.frame:
@@ -107,17 +108,21 @@ class PrimsExtension(omni.ext.IExt):
                     # # material = get_preview_surface_material("blue",0, 0, 1)
                     material = self.matlib[self._current_material]
                     UsdShade.MaterialBindingAPI(billboard).Bind(material)
+                    print(billboard)
 
    
                     print(f"billboard clicked (cwd:{os.getcwd()})")
 
                 def on_click(primtype):
                     self.ensure_stage()
-                    omni.kit.commands.execute('CreateMeshPrimWithDefaultXform',	prim_type=primtype)      
+                    primpath = f"/World/{primtype}_{self._count}"
+                    omni.kit.commands.execute('CreateMeshPrimWithDefaultXform',	prim_type=primtype, prim_path=primpath)      
                     material = self.matlib[self._current_material]
+                    self._count += 1
+
+                    prim: Usd.Prim = self._stage.GetPrimAtPath(primpath)
+                    UsdShade.MaterialBindingAPI(prim).Bind(material)
                     # material = get_preview_surface_material("blue",0, 0, 1)
-
-
 
                     print("clicked")
 
