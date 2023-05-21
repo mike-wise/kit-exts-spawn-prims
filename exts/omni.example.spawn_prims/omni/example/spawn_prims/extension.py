@@ -68,8 +68,14 @@ class PrimsExtension(omni.ext.IExt):
         mtl.CreateSurfaceOutput().ConnectToSource(shader.ConnectableAPI(), "surface")
         return mtl
     
-    def copy_remote_material(self,matname):
-        mtl = None
+    def copy_remote_material(self,matname,urlbranch):
+        import omni.kit.commands
+
+        url = f'http://omniverse-content-production.s3-us-west-2.amazonaws.com/Materials/{urlbranch}.mdl'
+        mpath = f'/World/Looks/{matname}'
+        ok, mtl = omni.kit.commands.execute('CreateMdlMaterialPrimCommand', mtl_url = url, mtl_name = matname, mtl_path = mpath)
+        # mtl: Usd.Prim = self._stage.GetGetPrimAtPath(mpath) 
+        print(f"copy_remote_material {matname} {url} {mpath} {mtl}")
         return mtl
 
     matlib = {}
@@ -85,6 +91,7 @@ class PrimsExtension(omni.ext.IExt):
         self.matlib["white"] = self.make_preview_surface_material("white", 1, 1, 1)
         self.matlib["black"] = self.make_preview_surface_material("black", 0, 0, 0)
         self.matlib["sunset_texture"] = self.make_preview_surface_tex_material("sunset.png")
+        self.matlib["Blue_Glass"] = self.copy_remote_material("Blue_Glass","Base/Glass/Blue_Glass")
 
     def get_curmat(self):
         idx = self._matbox.get_item_value_model().as_int
@@ -97,7 +104,7 @@ class PrimsExtension(omni.ext.IExt):
         print("[omni.example.spawn_prims] omni example spawn_prims startup <<<<<<<<<<<<<<<<<")
         self._count = 0
         self._current_material = "green"
-        self._matkeys = ["red", "green", "blue", "yellow", "cyan", "magenta", "white", "black", "sunset_texture"]
+        self._matkeys = ["red", "green", "blue", "yellow", "cyan", "magenta", "white", "black", "sunset_texture", "Blue_Glass"]
 
         self._window = ui.Window("Spawn Primitives", width=300, height=300)
 
