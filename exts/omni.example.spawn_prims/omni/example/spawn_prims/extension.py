@@ -19,11 +19,12 @@ class PrimsExtension(omni.ext.IExt):
     # this extension is located on filesystem.
     _stage = None
 
-    def ensure_stage(self):             
+    def ensure_stage(self):   
+        print("ensure_stage")          
         if self._stage == None:
             self._stage = omni.usd.get_context().get_stage()
+            print(f"ensure_stage:{self._stage}")
             self.create_materials()
-            # print("ensure_stage", self._stage)
 
     def make_preview_surface_tex_material(self, fname):
         # This is all materials
@@ -73,8 +74,9 @@ class PrimsExtension(omni.ext.IExt):
 
         url = f'http://omniverse-content-production.s3-us-west-2.amazonaws.com/Materials/{urlbranch}.mdl'
         mpath = f'/World/Looks/{matname}'
-        ok, mtl = omni.kit.commands.execute('CreateMdlMaterialPrimCommand', mtl_url = url, mtl_name = matname, mtl_path = mpath)
-        # mtl: Usd.Prim = self._stage.GetGetPrimAtPath(mpath) 
+        omni.kit.commands.execute('CreateMdlMaterialPrimCommand', mtl_url = url, mtl_name = matname, mtl_path = mpath)
+        print(f"stagetype 1 {self._stage}")
+        mtl: UsdShade.Material = UsdShade.Material(self._stage.GetPrimAtPath(mpath) )
         print(f"copy_remote_material {matname} {url} {mpath} {mtl}")
         return mtl
 
@@ -92,19 +94,40 @@ class PrimsExtension(omni.ext.IExt):
         self.matlib["black"] = self.make_preview_surface_material("black", 0, 0, 0)
         self.matlib["sunset_texture"] = self.make_preview_surface_tex_material("sunset.png")
         self.matlib["Blue_Glass"] = self.copy_remote_material("Blue_Glass","Base/Glass/Blue_Glass")
+        self.matlib["Red_Glass"] = self.copy_remote_material("Red_Glass","Base/Glass/Red_Glass")
+        self.matlib["Green_Glass"] = self.copy_remote_material("Green_Glass","Base/Glass/Green_Glass")
+        self.matlib["Clear_Glass"] = self.copy_remote_material("Clear_Glass","Base/Glass/Clear_Glass")
 
-    def get_curmat(self):
+    def get_curmat_mat(self):
+        idx = self._matbox.get_item_value_model().as_int
+        key = self._matkeys[idx]
+        if key in self.matlib:
+            rv = self.matlib[key]
+        else:
+            rv = None
+
+        print(f"get_curmat_mat:{idx} {key} {rv}")
+        return rv
+
+    def get_curmat_name(self):
         idx = self._matbox.get_item_value_model().as_int
         rv = self._matkeys[idx]
-        self._current_material = "green"
         print(f"get_curmat:{idx}  {rv}")
         return rv
+    
+    def get_curmat_path(self):
+        idx = self._matbox.get_item_value_model().as_int
+        matname = self._matkeys[idx]
+        rv = f"/World/Looks/{matname}"
+        print(f"get_curmat_path:{idx}  {rv}")
+        return rv    
 
     def on_startup(self, ext_id):
         print("[omni.example.spawn_prims] omni example spawn_prims startup <<<<<<<<<<<<<<<<<")
         self._count = 0
-        self._current_material = "green"
-        self._matkeys = ["red", "green", "blue", "yellow", "cyan", "magenta", "white", "black", "sunset_texture", "Blue_Glass"]
+        self._current_material = "Blue_Glass"
+        self._matkeys = ["Blue_Glass","red", "green", "blue", "yellow", "cyan", "magenta", "white", "black", "sunset_texture", 
+                          "Red_Glass", "Green_Glass", "Clear_Glass"]
 
         self._window = ui.Window("Spawn Primitives", width=300, height=300)
 
@@ -134,11 +157,25 @@ class PrimsExtension(omni.ext.IExt):
                     self.ensure_stage()
                     primpath = f"/World/{primtype}_{self._count}"
                     omni.kit.commands.execute('CreateMeshPrimWithDefaultXform',	prim_type=primtype, prim_path=primpath)
-                    material = self.matlib[self.get_curmat()]
+                    
+                    material = self.get_curmat_mat()
                     self._count += 1
 
-                    prim: Usd.Prim = self._stage.GetPrimAtPath(primpath)
+
+                    prim = self._stage.GetPrimAtPath(primpath)
+
+                    print(f"binding:{material}")
                     UsdShade.MaterialBindingAPI(prim).Bind(material)
+
+
+                    # UsdShade.MaterialBindingAPI(prim).Bind
+
+                    # matpath = self.get_curmat_path()
+                    # omni.kit.commands.execute('BindMaterialCommand',
+                    #     prim_path=[Sdf.Path(primpath)],
+                    #     material_path=Sdf.Path(matpath),
+                    #     strength='weakerThanDescendants')
+
 
                     print("clicked")
 
@@ -151,7 +188,7 @@ class PrimsExtension(omni.ext.IExt):
                 ui.Button("Spawn Torus", clicked_fn=lambda: on_click("Torus"))
                 ui.Button("Spawn USD Billboard", clicked_fn=lambda: on_click_billboard())
 
-                self._matbox = ui.ComboBox(1, *self._matkeys).model
+                self._matbox = ui.ComboBox(0, *self._matkeys).model
 
     def on_shutdown(self):
         print("[omni.example.spawn_prims] omni example spawn_prims shutdown")
