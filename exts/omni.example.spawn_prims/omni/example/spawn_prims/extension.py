@@ -5,6 +5,7 @@ import omni.usd
 import os
 from pxr import Gf, Kind, Sdf, Usd, UsdGeom, UsdShade
 
+# flake8: noqa
 # Functions and vars are available to other extension as usual in python: `example.python_ext.some_public_function(x)`
 def some_public_function(x: int):
     print("[omni.example.spawn_prims] some_public_function was called with x: ", x)
@@ -18,11 +19,11 @@ class PrimsExtension(omni.ext.IExt):
     # this extension is located on filesystem.
     _stage = None
 
-    def ensure_stage(self):       
+    def ensure_stage(self):             
         if self._stage == None:
             self._stage = omni.usd.get_context().get_stage()
-            print("stage", self._stage)
-            self.create_materials()            
+            self.create_materials()
+            # print("ensure_stage", self._stage)
 
     def make_preview_surface_tex_material(self, fname):
         # This is all materials
@@ -41,10 +42,10 @@ class PrimsExtension(omni.ext.IExt):
         diffuseTextureSampler = UsdShade.Shader.Define(self._stage, f'{matpath}/diffuseTexture')
         diffuseTextureSampler.CreateIdAttr('UsdUVTexture')
         ASSETS_DIRECTORY = os.path.dirname(os.path.realpath(__file__))
-        print(f"ASSETS_DIRECTORY {ASSETS_DIRECTORY}")                    
+        # print(f"ASSETS_DIRECTORY {ASSETS_DIRECTORY}")                    
         texfile = f"{ASSETS_DIRECTORY}\\{fname}"
-        print(texfile)
-        print(os.path.exists(texfile))
+        # print(texfile)
+        # print(os.path.exists(texfile))
         diffuseTextureSampler.CreateInput('file', Sdf.ValueTypeNames.Asset).Set(texfile)
         diffuseTextureSampler.CreateInput("st", Sdf.ValueTypeNames.Float2).ConnectToSource(stReader.ConnectableAPI(), 'result')
         diffuseTextureSampler.CreateOutput('rgb', Sdf.ValueTypeNames.Float3)
@@ -66,6 +67,10 @@ class PrimsExtension(omni.ext.IExt):
         shader.CreateInput("metallic", Sdf.ValueTypeNames.Float).Set(0.0)
         mtl.CreateSurfaceOutput().ConnectToSource(shader.ConnectableAPI(), "surface")
         return mtl
+    
+    def copy_remote_material(self,matname):
+        mtl = None
+        return mtl
 
     matlib = {}
 
@@ -81,13 +86,21 @@ class PrimsExtension(omni.ext.IExt):
         self.matlib["black"] = self.make_preview_surface_material("black", 0, 0, 0)
         self.matlib["sunset_texture"] = self.make_preview_surface_tex_material("sunset.png")
 
+    def get_curmat(self):
+        idx = self._matbox.get_item_value_model().as_int
+        rv = self._matkeys[idx]
+        self._current_material = "green"
+        print(f"get_curmat:{idx}  {rv}")
+        return rv
+
     def on_startup(self, ext_id):
         print("[omni.example.spawn_prims] omni example spawn_prims startup <<<<<<<<<<<<<<<<<")
         self._count = 0
-        self._current_material = "blue"
-
+        self._current_material = "green"
+        self._matkeys = ["red", "green", "blue", "yellow", "cyan", "magenta", "white", "black", "sunset_texture"]
 
         self._window = ui.Window("Spawn Primitives", width=300, height=300)
+
         with self._window.frame:
             with ui.VStack():
 
@@ -101,28 +114,24 @@ class PrimsExtension(omni.ext.IExt):
                     billboard.CreateFaceVertexIndicesAttr([0, 1, 2, 3])
                     billboard.CreateExtentAttr([(-430, -145, 0), (430, 145, 0)])
                     texCoords = UsdGeom.PrimvarsAPI(billboard).CreatePrimvar("st",
-                                    Sdf.ValueTypeNames.TexCoord2fArray, UsdGeom.Tokens.varying)
+                                        Sdf.ValueTypeNames.TexCoord2fArray, UsdGeom.Tokens.varying)
                     texCoords.Set([(0, 0), (1, 0), (1,1), (0, 1)])
 
-                    # material = self._current_materail
-                    # # material = get_preview_surface_material("blue",0, 0, 1)
-                    material = self.matlib[self._current_material]
+                    material = self.matlib[self.get_curmat()]
                     UsdShade.MaterialBindingAPI(billboard).Bind(material)
                     print(billboard)
 
-   
                     print(f"billboard clicked (cwd:{os.getcwd()})")
 
                 def on_click(primtype):
                     self.ensure_stage()
                     primpath = f"/World/{primtype}_{self._count}"
-                    omni.kit.commands.execute('CreateMeshPrimWithDefaultXform',	prim_type=primtype, prim_path=primpath)      
-                    material = self.matlib[self._current_material]
+                    omni.kit.commands.execute('CreateMeshPrimWithDefaultXform',	prim_type=primtype, prim_path=primpath)
+                    material = self.matlib[self.get_curmat()]
                     self._count += 1
 
                     prim: Usd.Prim = self._stage.GetPrimAtPath(primpath)
                     UsdShade.MaterialBindingAPI(prim).Bind(material)
-                    # material = get_preview_surface_material("blue",0, 0, 1)
 
                     print("clicked")
 
@@ -134,6 +143,8 @@ class PrimsExtension(omni.ext.IExt):
                 ui.Button("Spawn Sphere", clicked_fn=lambda: on_click("Sphere"))
                 ui.Button("Spawn Torus", clicked_fn=lambda: on_click("Torus"))
                 ui.Button("Spawn USD Billboard", clicked_fn=lambda: on_click_billboard())
+
+                self._matbox = ui.ComboBox(1, *self._matkeys).model
 
     def on_shutdown(self):
         print("[omni.example.spawn_prims] omni example spawn_prims shutdown")
