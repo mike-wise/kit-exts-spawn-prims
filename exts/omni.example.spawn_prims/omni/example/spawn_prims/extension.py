@@ -1,15 +1,18 @@
 import omni.ext
 import omni.ui as ui
-import omni.kit.commands
+import omni.kit.commands as okc
 import omni.usd
 import os
+import math
 from pxr import Gf, Kind, Sdf, Usd, UsdGeom, UsdShade
 
-# flake8: noqa
+
+# fflake8: noqa
 # Functions and vars are available to other extension as usual in python: `example.python_ext.some_public_function(x)`
 def some_public_function(x: int):
     print("[omni.example.spawn_prims] some_public_function was called with x: ", x)
     return x ** x
+
 
 # Any class derived from `omni.ext.IExt` in top level module (defined in `python.modules` of `extension.toml`) will be
 # instantiated when extension gets enabled and `on_startup(ext_id)` will be called. Later when extension gets disabled
@@ -19,12 +22,22 @@ class PrimsExtension(omni.ext.IExt):
     # this extension is located on filesystem.
     _stage = None
 
-    def ensure_stage(self):   
-        print("ensure_stage")          
-        if self._stage == None:
+    def ensure_stage(self):
+        print("ensure_stage")
+        if self._stage is None:
             self._stage = omni.usd.get_context().get_stage()
             print(f"ensure_stage:{self._stage}")
+            UsdGeom.SetStageUpAxis(self._stage, UsdGeom.Tokens.y)
             self.create_materials()
+        ppathstr = "/World/Floor"
+        prim_path_sdf = Sdf.Path(ppathstr)
+        prim: Usd.Prim = self._stage .GetPrimAtPath(prim_path_sdf)
+        if not prim.IsValid():
+            okc.execute('CreateMeshPrimWithDefaultXform',	prim_type="Plane", prim_path=ppathstr)
+            okc.execute('TransformMultiPrimsSRTCpp',
+                        count=1,
+                        paths=[ppathstr],
+                        new_scales=[5, 1, 5])
 
     def make_preview_surface_tex_material(self, fname):
         # This is all materials
@@ -36,7 +49,7 @@ class PrimsExtension(omni.ext.IExt):
         pbrShader.CreateInput("roughness", Sdf.ValueTypeNames.Float).Set(0.4)
         pbrShader.CreateInput("metallic", Sdf.ValueTypeNames.Float).Set(0.0)
 
-        material.CreateSurfaceOutput().ConnectToSource(pbrShader.ConnectableAPI(), "surface")                                       
+        material.CreateSurfaceOutput().ConnectToSource(pbrShader.ConnectableAPI(), "surface")
         stReader = UsdShade.Shader.Define(self._stage, f'{matpath}/stReader')
         stReader.CreateIdAttr('UsdPrimvarReader_float2')
 
@@ -69,12 +82,10 @@ class PrimsExtension(omni.ext.IExt):
         mtl.CreateSurfaceOutput().ConnectToSource(shader.ConnectableAPI(), "surface")
         return mtl
     
-    def copy_remote_material(self,matname,urlbranch):
-        import omni.kit.commands
-
+    def copy_remote_material(self, matname, urlbranch):
         url = f'http://omniverse-content-production.s3-us-west-2.amazonaws.com/Materials/{urlbranch}.mdl'
         mpath = f'/World/Looks/{matname}'
-        omni.kit.commands.execute('CreateMdlMaterialPrimCommand', mtl_url = url, mtl_name = matname, mtl_path = mpath)
+        okc.execute('CreateMdlMaterialPrimCommand', mtl_url=url, mtl_name=matname, mtl_path=mpath)
         print(f"stagetype 1 {self._stage}")
         mtl: UsdShade.Material = UsdShade.Material(self._stage.GetPrimAtPath(mpath) )
         print(f"copy_remote_material {matname} {url} {mpath} {mtl}")
@@ -93,10 +104,10 @@ class PrimsExtension(omni.ext.IExt):
         self.matlib["white"] = self.make_preview_surface_material("white", 1, 1, 1)
         self.matlib["black"] = self.make_preview_surface_material("black", 0, 0, 0)
         self.matlib["sunset_texture"] = self.make_preview_surface_tex_material("sunset.png")
-        self.matlib["Blue_Glass"] = self.copy_remote_material("Blue_Glass","Base/Glass/Blue_Glass")
-        self.matlib["Red_Glass"] = self.copy_remote_material("Red_Glass","Base/Glass/Red_Glass")
-        self.matlib["Green_Glass"] = self.copy_remote_material("Green_Glass","Base/Glass/Green_Glass")
-        self.matlib["Clear_Glass"] = self.copy_remote_material("Clear_Glass","Base/Glass/Clear_Glass")
+        self.matlib["Blue_Glass"] = self.copy_remote_material("Blue_Glass", "Base/Glass/Blue_Glass")
+        self.matlib["Red_Glass"] = self.copy_remote_material("Red_Glass", "Base/Glass/Red_Glass")
+        self.matlib["Green_Glass"] = self.copy_remote_material("Green_Glass", "Base/Glass/Green_Glass")
+        self.matlib["Clear_Glass"] = self.copy_remote_material("Clear_Glass", "Base/Glass/Clear_Glass")
 
     def get_curmat_mat(self):
         idx = self._matbox.get_item_value_model().as_int
@@ -114,20 +125,86 @@ class PrimsExtension(omni.ext.IExt):
         rv = self._matkeys[idx]
         print(f"get_curmat:{idx}  {rv}")
         return rv
-    
+
     def get_curmat_path(self):
         idx = self._matbox.get_item_value_model().as_int
         matname = self._matkeys[idx]
         rv = f"/World/Looks/{matname}"
         print(f"get_curmat_path:{idx}  {rv}")
-        return rv    
+        return rv
+
+    def create_billboard(self):
+        UsdGeom.SetStageUpAxis(self._stage, UsdGeom.Tokens.y)
+
+        billboard = UsdGeom.Mesh.Define(self._stage, "/World/Billboard")
+        billboard.CreatePointsAttr([(-430, -145, 0), (430, -145, 0), (430, 145, 0), (-430, 145, 0)])
+        billboard.CreateFaceVertexCountsAttr([4])
+        billboard.CreateFaceVertexIndicesAttr([0, 1, 2, 3])
+        billboard.CreateExtentAttr([(-430, -145, 0), (430, 145, 0)])
+        texCoords = UsdGeom.PrimvarsAPI(billboard).CreatePrimvar("st", Sdf.ValueTypeNames.TexCoord2fArray, UsdGeom.Tokens.varying)
+        texCoords.Set([(0, 0), (1, 0), (1, 1), (0, 1)])
+        return billboard
+
+    def create_spheremesh(self, pt: Gf.Vec3f, radius: float, nlat: int, nlong: int):
+
+        spheremesh = UsdGeom.Mesh.Define(self._stage, "/World/SphereMesh")
+        vtxcnt = int(0)
+        pts = []
+        txc = []
+        vcs = []
+        idx = []
+        polegap = 0.01
+        for i in range(nlat):
+            x = i / float(nlat-1)
+            for j in range(nlong):
+                y = j / float(nlong-1)
+                theta = polegap + (i * (math.pi-2*polegap) / float(nlat-1))
+                phi = j * 2 * math.pi / float(nlong-1)
+                x = radius * math.sin(theta) * math.cos(phi)
+                y = radius * math.cos(theta)
+                z = radius * math.sin(theta) * math.sin(phi)
+                pt = Gf.Vec3f(x, y, z)
+                pts.append(pt)
+                txc.append((x, y))
+
+        for i in range(nlat-1):
+            offset = i * nlong
+            for j in range(nlong-1):
+                vcs.append(int(4))
+                if j < nlong - 1:
+                    i1 = offset+j
+                    i2 = offset+j+1
+                    i3 = offset+j+nlong+1
+                    i4 = offset+j+nlong
+                else:
+                    i1 = offset+j
+                    i2 = offset
+                    i3 = offset+nlong
+                    i4 = offset+j+nlong
+                idx.append(int(i1))
+                idx.append(int(i2))
+                idx.append(int(i3))
+                idx.append(int(i4))
+                print(f"i:{i} j:{j} vtxcnt:{vtxcnt} i1:{i1} i2:{i2} i3:{i3} i4:{i4}")
+
+                vtxcnt += 1
+
+        print(len(pts), len(txc), len(vcs), len(idx))
+        spheremesh.CreatePointsAttr(pts)
+        spheremesh.CreateFaceVertexCountsAttr(vcs)
+        spheremesh.CreateFaceVertexIndicesAttr(idx)
+        spheremesh.CreateExtentAttr([(-radius, -radius, -radius), (radius, radius, radius)])
+        texCoords = UsdGeom.PrimvarsAPI(spheremesh).CreatePrimvar("st",
+                                  Sdf.ValueTypeNames.TexCoord2fArray, UsdGeom.Tokens.varying)
+        texCoords.Set(txc)
+        return spheremesh
 
     def on_startup(self, ext_id):
         print("[omni.example.spawn_prims] omni example spawn_prims startup <<<<<<<<<<<<<<<<<")
         self._count = 0
         self._current_material = "Blue_Glass"
-        self._matkeys = ["Blue_Glass","red", "green", "blue", "yellow", "cyan", "magenta", "white", "black", "sunset_texture", 
-                          "Red_Glass", "Green_Glass", "Clear_Glass"]
+        self._matkeys = ["Blue_Glass", "red", "green", "blue", "yellow", "cyan", "magenta", "white", "black", 
+                         "sunset_texture", "Red_Glass", "Green_Glass", "Clear_Glass"]
 
         self._window = ui.Window("Spawn Primitives", width=300, height=300)
 
@@ -136,48 +213,43 @@ class PrimsExtension(omni.ext.IExt):
 
                 def on_click_billboard():
                     self.ensure_stage()
-                    UsdGeom.SetStageUpAxis(self._stage, UsdGeom.Tokens.y)
 
-                    billboard = UsdGeom.Mesh.Define(self._stage, "/World/Billboard")
-                    billboard.CreatePointsAttr([(-430, -145, 0), (430, -145, 0), (430, 145, 0), (-430, 145, 0)])
-                    billboard.CreateFaceVertexCountsAttr([4])
-                    billboard.CreateFaceVertexIndicesAttr([0, 1, 2, 3])
-                    billboard.CreateExtentAttr([(-430, -145, 0), (430, 145, 0)])
-                    texCoords = UsdGeom.PrimvarsAPI(billboard).CreatePrimvar("st",
-                                        Sdf.ValueTypeNames.TexCoord2fArray, UsdGeom.Tokens.varying)
-                    texCoords.Set([(0, 0), (1, 0), (1,1), (0, 1)])
+                    billboard = self.create_billboard()
 
-                    material = self.matlib[self.get_curmat()]
+                    material = self.get_curmat_mat()
                     UsdShade.MaterialBindingAPI(billboard).Bind(material)
                     print(billboard)
 
                     print(f"billboard clicked (cwd:{os.getcwd()})")
 
+                def on_click_spheremesh():
+                    self.ensure_stage()
+
+                    spheremesh = self.create_spheremesh(Gf.Vec3f(0, 0, 0), 1, 20, 20)
+
+                    material = self.get_curmat_mat()
+                    UsdShade.MaterialBindingAPI(spheremesh).Bind(material)
+                    print(spheremesh)
+
+                    print(f"spheremesh clicked (cwd:{os.getcwd()})")                    
+
                 def on_click(primtype):
                     self.ensure_stage()
                     primpath = f"/World/{primtype}_{self._count}"
-                    omni.kit.commands.execute('CreateMeshPrimWithDefaultXform',	prim_type=primtype, prim_path=primpath)
-                    
+                    okc.execute('CreateMeshPrimWithDefaultXform',	prim_type=primtype, prim_path=primpath)
+
                     material = self.get_curmat_mat()
                     self._count += 1
 
+                    prim: Usd.Prim = self._stage.GetPrimAtPath(primpath)
+                    okc.execute('TransformMultiPrimsSRTCpp',
+                                count=1,
+                                paths=[primpath],
+                                new_scales=[1, 1, 1],
+                                new_translations=[0, 50, 0])
 
-                    prim = self._stage.GetPrimAtPath(primpath)
-
-                    print(f"binding:{material}")
+                    print(f"on click binding:{material}")
                     UsdShade.MaterialBindingAPI(prim).Bind(material)
-
-
-                    # UsdShade.MaterialBindingAPI(prim).Bind
-
-                    # matpath = self.get_curmat_path()
-                    # omni.kit.commands.execute('BindMaterialCommand',
-                    #     prim_path=[Sdf.Path(primpath)],
-                    #     material_path=Sdf.Path(matpath),
-                    #     strength='weakerThanDescendants')
-
-
-                    print("clicked")
 
                 ui.Button("Spawn Cube", clicked_fn=lambda: on_click("Cube"))
                 ui.Button("Spawn Cone", clicked_fn=lambda: on_click("Cone"))
@@ -186,12 +258,10 @@ class PrimsExtension(omni.ext.IExt):
                 ui.Button("Spawn Plane", clicked_fn=lambda: on_click("Plane"))
                 ui.Button("Spawn Sphere", clicked_fn=lambda: on_click("Sphere"))
                 ui.Button("Spawn Torus", clicked_fn=lambda: on_click("Torus"))
-                ui.Button("Spawn USD Billboard", clicked_fn=lambda: on_click_billboard())
+                ui.Button("Spawn Billboard", clicked_fn=lambda: on_click_billboard())
+                ui.Button("Spawn ShereMesh", clicked_fn=lambda: on_click_spheremesh())
 
                 self._matbox = ui.ComboBox(0, *self._matkeys).model
 
     def on_shutdown(self):
         print("[omni.example.spawn_prims] omni example spawn_prims shutdown")
-
-
-
