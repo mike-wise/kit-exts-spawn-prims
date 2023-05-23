@@ -145,11 +145,27 @@ class PrimsExtension(omni.ext.IExt):
         texCoords.Set([(0, 0), (1, 0), (1, 1), (0, 1)])
         return billboard
 
-    def create_spheremesh(self, pt: Gf.Vec3f, radius: float, nlat: int, nlong: int):
+    def create_marker(self, name: str, matname: str, cenpt: Gf.Vec3f, rad: float):
+        print(f"create_marker {name} {matname} {cenpt} {rad}")
+        primpath = f"/World/markers/{name}"
+        okc.execute("DeletePrimsCommand", paths=[primpath])  
+        okc.execute('CreateMeshPrimWithDefaultXform', prim_type="Sphere", prim_path=primpath)
+        sz = rad/100
+        okc.execute('TransformMultiPrimsSRTCpp',
+                    count=1,
+                    paths=[primpath],
+                    new_scales=[sz, sz, sz],
+                    new_translations=[cenpt[0], cenpt[1], cenpt[2]])
+        material = self.matlib[matname]
+        prim: Usd.Prim = self._stage.GetPrimAtPath(primpath)
+        UsdShade.MaterialBindingAPI(prim).Bind(material)
+
+    def create_spheremesh(self, cenpt: Gf.Vec3f, radius: float, nlat: int, nlong: int):
 
         spheremesh = UsdGeom.Mesh.Define(self._stage, "/World/SphereMesh")
         vtxcnt = int(0)
         pts = []
+        nrm = []
         txc = []
         vcs = []
         idx = []
@@ -160,12 +176,23 @@ class PrimsExtension(omni.ext.IExt):
                 y = j / float(nlong-1)
                 theta = polegap + (i * (math.pi-2*polegap) / float(nlat-1))
                 phi = j * 2 * math.pi / float(nlong-1)
-                x = radius * math.sin(theta) * math.cos(phi)
-                y = radius * math.cos(theta)
-                z = radius * math.sin(theta) * math.sin(phi)
-                pt = Gf.Vec3f(x, y, z)
+                nx = math.sin(theta) * math.cos(phi)
+                ny = math.cos(theta)
+                nz = math.sin(theta) * math.sin(phi) 
+                x = radius * nx
+                y = radius * ny
+                z = radius * nz
+                rawpt = Gf.Vec3f(x, y, z)
+                nrmvek = Gf.Vec3f(nx, ny, nz)
+                pt = rawpt + cenpt
+                nrm.append(nrmvek)
                 pts.append(pt)
                 txc.append((x, y))
+                ptname = f"ppt_{i}_{j}"
+                npt = Gf.Vec3f(x+nx, y+ny, z+nz)
+                nmname = f"npt_{i}_{j}"
+                self.create_marker(ptname, "red", pt, 1)
+                self.create_marker(nmname, "blue", npt, 1)
 
         for i in range(nlat-1):
             offset = i * nlong
@@ -191,6 +218,7 @@ class PrimsExtension(omni.ext.IExt):
 
         print(len(pts), len(txc), len(vcs), len(idx))
         spheremesh.CreatePointsAttr(pts)
+        spheremesh.CreateNormalsAttr(nrm)
         spheremesh.CreateFaceVertexCountsAttr(vcs)
         spheremesh.CreateFaceVertexIndicesAttr(idx)
         spheremesh.CreateExtentAttr([(-radius, -radius, -radius), (radius, radius, radius)])
@@ -202,9 +230,9 @@ class PrimsExtension(omni.ext.IExt):
     def on_startup(self, ext_id):
         print("[omni.example.spawn_prims] omni example spawn_prims startup <<<<<<<<<<<<<<<<<")
         self._count = 0
-        self._current_material = "Blue_Glass"
-        self._matkeys = ["Blue_Glass", "red", "green", "blue", "yellow", "cyan", "magenta", "white", "black", 
-                         "sunset_texture", "Red_Glass", "Green_Glass", "Clear_Glass"]
+        self._current_material = "Clear_Glass"
+        self._matkeys = ["Clear_Glass", "Blue_Glass", "red", "green", "blue", "yellow", "cyan", "magenta", "white", "black", 
+                         "sunset_texture", "Red_Glass", "Green_Glass" ]
 
         self._window = ui.Window("Spawn Primitives", width=300, height=300)
 
@@ -225,7 +253,7 @@ class PrimsExtension(omni.ext.IExt):
                 def on_click_spheremesh():
                     self.ensure_stage()
 
-                    spheremesh = self.create_spheremesh(Gf.Vec3f(0, 0, 0), 1, 20, 20)
+                    spheremesh = self.create_spheremesh(Gf.Vec3f(0, 0, 0), 50, 10, 10)
 
                     material = self.get_curmat_mat()
                     UsdShade.MaterialBindingAPI(spheremesh).Bind(material)
