@@ -172,7 +172,9 @@ class PrimsExtension(omni.ext.IExt):
         return rv
 
     def create_spheremesh(self, name: str, matname: str, cenpt: Gf.Vec3f, radius: float, nlat: int, nlong: int, shownormals: bool = False):
-
+        # This will create nlat*nlog quads or twice that many triangles
+        # it will need nlat+1 vertices in the latitude direction and nlong vertices in the longitude direction
+        # so a total of (nlat+1)*(nlong) vertices
         spheremesh = UsdGeom.Mesh.Define(self._stage, name)
         vtxcnt = int(0)
         pts = []
@@ -180,7 +182,7 @@ class PrimsExtension(omni.ext.IExt):
         txc = []
         vcs = []
         idx = []
-        polegap = 0.01
+        polegap = 0.01 # prevents the vertices from being exactly on the poles
         for i in range(nlat+1):
             for j in range(nlong):
                 theta = polegap + (i * (math.pi-2*polegap) / float(nlat))
@@ -253,7 +255,7 @@ class PrimsExtension(omni.ext.IExt):
         offvek = cenpt - basept
         len = offvek.GetLength()
         if len > 0:
-            lxax = self.cross_product(offvek, self.xax)
+            lxax = self.cross_product(offvek, self.yax)
             if lxax.GetLength() == 0:
                 lxax = self.cross_product(offvek, self.zax)
             lxax.Normalize()
