@@ -132,6 +132,10 @@ class PrimsExtension(omni.ext.IExt):
         rv = f"/World/Looks/{matname}"
         print(f"get_curmat_path:{idx}  {rv}")
         return rv
+    
+    def delete_if_exists(self, primpath):
+        if self._stage.GetPrimAtPath(primpath):
+            okc.execute("DeletePrimsCommand", paths=[primpath])  
 
     def create_billboard(self):
         UsdGeom.SetStageUpAxis(self._stage, UsdGeom.Tokens.y)
@@ -148,7 +152,7 @@ class PrimsExtension(omni.ext.IExt):
     def create_marker(self, name: str, matname: str, cenpt: Gf.Vec3f, rad: float):
         print(f"create_marker {name} {matname} {cenpt} {rad}")
         primpath = f"/World/markers/{name}"
-        okc.execute("DeletePrimsCommand", paths=[primpath])  
+        self.delete_if_exists(primpath)
         okc.execute('CreateMeshPrimWithDefaultXform', prim_type="Sphere", prim_path=primpath)
         sz = rad/100
         okc.execute('TransformMultiPrimsSRTCpp',
@@ -160,9 +164,16 @@ class PrimsExtension(omni.ext.IExt):
         prim: Usd.Prim = self._stage.GetPrimAtPath(primpath)
         UsdShade.MaterialBindingAPI(prim).Bind(material)
 
-    def create_spheremesh(self, cenpt: Gf.Vec3f, radius: float, nlat: int, nlong: int):
+    def cross_product(self, v1: Gf.Vec3f, v2: Gf.Vec3f) -> Gf.Vec3f:
+        x = v1[1] * v2[2] - v1[2] * v2[1]
+        y = v1[2] * v2[0] - v1[0] * v2[2]
+        z = v1[0] * v2[1] - v1[1] * v2[0]
+        rv = Gf.Vec3f(x, y, z)
+        return rv
 
-        spheremesh = UsdGeom.Mesh.Define(self._stage, "/World/SphereMesh")
+    def create_spheremesh(self, name: str, matname: str, cenpt: Gf.Vec3f, radius: float, nlat: int, nlong: int, shownormals: bool = False):
+
+        spheremesh = UsdGeom.Mesh.Define(self._stage, name)
         vtxcnt = int(0)
         pts = []
         nrm = []
@@ -170,15 +181,13 @@ class PrimsExtension(omni.ext.IExt):
         vcs = []
         idx = []
         polegap = 0.01
-        for i in range(nlat):
-            x = i / float(nlat-1)
+        for i in range(nlat+1):
             for j in range(nlong):
-                y = j / float(nlong-1)
-                theta = polegap + (i * (math.pi-2*polegap) / float(nlat-1))
-                phi = j * 2 * math.pi / float(nlong-1)
+                theta = polegap + (i * (math.pi-2*polegap) / float(nlat))
+                phi = j * 2 * math.pi / float(nlong)
                 nx = math.sin(theta) * math.cos(phi)
                 ny = math.cos(theta)
-                nz = math.sin(theta) * math.sin(phi) 
+                nz = math.sin(theta) * math.sin(phi)
                 x = radius * nx
                 y = radius * ny
                 z = radius * nz
@@ -188,15 +197,16 @@ class PrimsExtension(omni.ext.IExt):
                 nrm.append(nrmvek)
                 pts.append(pt)
                 txc.append((x, y))
-                ptname = f"ppt_{i}_{j}"
-                npt = Gf.Vec3f(x+nx, y+ny, z+nz)
-                nmname = f"npt_{i}_{j}"
-                self.create_marker(ptname, "red", pt, 1)
-                self.create_marker(nmname, "blue", npt, 1)
+                if shownormals:
+                    ptname = f"ppt_{i}_{j}"
+                    npt = Gf.Vec3f(x+nx, y+ny, z+nz)
+                    nmname = f"npt_{i}_{j}"
+                    self.create_marker(ptname, "red", pt, 1)
+                    self.create_marker(nmname, "blue", npt, 1)
 
-        for i in range(nlat-1):
+        for i in range(nlat):
             offset = i * nlong
-            for j in range(nlong-1):
+            for j in range(nlong):
                 vcs.append(int(4))
                 if j < nlong - 1:
                     i1 = offset+j
@@ -208,11 +218,8 @@ class PrimsExtension(omni.ext.IExt):
                     i2 = offset
                     i3 = offset+nlong
                     i4 = offset+j+nlong
-                idx.append(int(i1))
-                idx.append(int(i2))
-                idx.append(int(i3))
-                idx.append(int(i4))
-                print(f"i:{i} j:{j} vtxcnt:{vtxcnt} i1:{i1} i2:{i2} i3:{i3} i4:{i4}")
+                idx.extend([i1, i2, i3, i4])
+                #print(f"i:{i} j:{j} vtxcnt:{vtxcnt} i1:{i1} i2:{i2} i3:{i3} i4:{i4}")
 
                 vtxcnt += 1
 
@@ -225,14 +232,57 @@ class PrimsExtension(omni.ext.IExt):
         texCoords = UsdGeom.PrimvarsAPI(spheremesh).CreatePrimvar("st",
                                   Sdf.ValueTypeNames.TexCoord2fArray, UsdGeom.Tokens.varying)
         texCoords.Set(txc)
+
+        material = self.matlib[matname]
+        # prim: Usd.Prim = self._stage.GetPrimAtPath(primpath)
+        UsdShade.MaterialBindingAPI(spheremesh).Bind(material)
+
         return spheremesh
+
+    xax = Gf.Vec3f(1, 0, 0)
+    yax = Gf.Vec3f(0, 1, 0)
+    zax = Gf.Vec3f(0, 0, 1)
+
+    def create_sphereflake(self, name: str, matname: str, depth: int, basept: Gf.Vec3f, cenpt: Gf.Vec3f, rad: float):
+        print(f"create_sphereflake {name} {matname} {depth} {cenpt} {rad}")
+        basename = name + "/base"
+        self.delete_if_exists(basename)
+
+        self.create_spheremesh(basename, matname, cenpt,  rad, 8, 8)
+
+        offvek = cenpt - basept
+        len = offvek.GetLength()
+        if len > 0:
+            lxax = self.cross_product(offvek, self.xax)
+            if lxax.GetLength() == 0:
+                lxax = self.cross_product(offvek, self.zax)
+            lxax.Normalize()
+            lzax = self.cross_product(offvek, lxax)
+            lzax.Normalize()
+            lyax = offvek
+            lyax.Normalize()
+        else:
+            lxax = self.xax
+            lyax = self.yax
+            lzax = self.zax
+
+        if depth > 0:
+            for i in range(8):
+                theta = i * math.pi / 4
+                x = rad * math.sin(theta)
+                y = 0
+                z = rad * math.cos(theta)
+                nrad = rad / 4
+                npt = x*lxax + y*lyax + z*lzax
+                subname = f"{basename}/sub_{i}"
+                self.create_sphereflake(subname, matname, depth-1, cenpt, cenpt+npt, nrad)
 
     def on_startup(self, ext_id):
         print("[omni.example.spawn_prims] omni example spawn_prims startup <<<<<<<<<<<<<<<<<")
         self._count = 0
         self._current_material = "Clear_Glass"
         self._matkeys = ["Clear_Glass", "Blue_Glass", "red", "green", "blue", "yellow", "cyan", "magenta", "white", "black", 
-                         "sunset_texture", "Red_Glass", "Green_Glass" ]
+                         "sunset_texture", "Red_Glass", "Green_Glass"]
 
         self._window = ui.Window("Spawn Primitives", width=300, height=300)
 
@@ -253,13 +303,18 @@ class PrimsExtension(omni.ext.IExt):
                 def on_click_spheremesh():
                     self.ensure_stage()
 
-                    spheremesh = self.create_spheremesh(Gf.Vec3f(0, 0, 0), 50, 10, 10)
-
-                    material = self.get_curmat_mat()
-                    UsdShade.MaterialBindingAPI(spheremesh).Bind(material)
-                    print(spheremesh)
-
+                    matname = self.get_curmat_name()
+                    matname = "Blue_Glass"
+                    spheremesh = self.create_spheremesh("/World/SphereMesh", matname, Gf.Vec3f(0, 0, 0), 50, 8, 8)
                     print(f"spheremesh clicked (cwd:{os.getcwd()})")                    
+
+                def on_click_sphereflake():
+                    self.ensure_stage()
+
+                    matname: str = self.get_curmat_name()
+                    cpt = Gf.Vec3f(0, 0, 0)
+                    sphereflake= self.create_sphereflake("/World/SphereFlake", matname, 3, cpt, cpt, 50)
+                    print(f"sphereflake clicked (cwd:{os.getcwd()})")                    
 
                 def on_click(primtype):
                     self.ensure_stage()
@@ -288,6 +343,7 @@ class PrimsExtension(omni.ext.IExt):
                 ui.Button("Spawn Torus", clicked_fn=lambda: on_click("Torus"))
                 ui.Button("Spawn Billboard", clicked_fn=lambda: on_click_billboard())
                 ui.Button("Spawn ShereMesh", clicked_fn=lambda: on_click_spheremesh())
+                ui.Button("Spawn ShereFlake", clicked_fn=lambda: on_click_sphereflake())
 
                 self._matbox = ui.ComboBox(0, *self._matkeys).model
 
