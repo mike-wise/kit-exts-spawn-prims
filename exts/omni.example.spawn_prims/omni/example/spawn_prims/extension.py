@@ -4,14 +4,110 @@ import omni.kit.commands as okc
 import omni.usd
 import os
 import math
-from pxr import Gf, Kind, Sdf, Usd, UsdGeom, UsdShade
+import time
+from pxr import Gf, Sdf, Usd, UsdGeom, UsdShade
 
 
 # fflake8: noqa
-# Functions and vars are available to other extension as usual in python: `example.python_ext.some_public_function(x)`
-def some_public_function(x: int):
-    print("[omni.example.spawn_prims] some_public_function was called with x: ", x)
-    return x ** x
+
+class SphereMeshFactory():
+
+    def __init__(self, stage, material, show_normals=False) -> None:
+        self._stage = stage
+        self._material = material
+        self._show_normals = show_normals
+        self._total_quads = 0
+        pass
+
+    def create_marker(self, name: str, material, cenpt: Gf.Vec3f, rad: float):
+        print(f"create_marker {name}  {cenpt} {rad}")
+        primpath = f"/World/markers/{name}"
+        self.delete_if_exists(primpath)
+        okc.execute('CreateMeshPrimWithDefaultXform', prim_type="Sphere", prim_path=primpath)
+        sz = rad/100
+        okc.execute('TransformMultiPrimsSRTCpp',
+                    count=1,
+                    paths=[primpath],
+                    new_scales=[sz, sz, sz],
+                    new_translations=[cenpt[0], cenpt[1], cenpt[2]])
+        prim: Usd.Prim = self._stage.GetPrimAtPath(primpath)
+        UsdShade.MaterialBindingAPI(prim).Bind(self._material)
+
+    
+    _show_normals = False
+
+
+
+    def create(self, name: str, cenpt: Gf.Vec3f, radius: float, nlat: int, nlong: int):
+        # This will create nlat*nlog quads or twice that many triangles
+        # it will need nlat+1 vertices in the latitude direction and nlong vertices in the longitude direction
+        # so a total of (nlat+1)*(nlong) vertices
+        spheremesh = UsdGeom.Mesh.Define(self._stage, name)
+        vtxcnt = int(0)
+        pts = []
+        nrm = []
+        txc = []
+        fvc = []
+        idx = []
+        polegap = 0.01  # prevents the vertices from being exactly on the poles
+        for i in range(nlat+1):
+            for j in range(nlong):
+                theta = polegap + (i * (math.pi-2*polegap) / float(nlat))
+                phi = j * 2 * math.pi / float(nlong)
+                nx = math.sin(theta) * math.cos(phi)
+                ny = math.cos(theta)
+                nz = math.sin(theta) * math.sin(phi)
+                x = radius * nx
+                y = radius * ny
+                z = radius * nz
+                rawpt = Gf.Vec3f(x, y, z)
+                nrmvek = Gf.Vec3f(nx, ny, nz)
+                pt = rawpt + cenpt
+                nrm.append(nrmvek)
+                pts.append(pt)
+                txc.append((x, y))
+                if self._show_normals:
+                    ptname = f"ppt_{i}_{j}"
+                    npt = Gf.Vec3f(x+nx, y+ny, z+nz)
+                    nmname = f"npt_{i}_{j}"
+                    self.create_marker(ptname, "red", pt, 1)
+                    self.create_marker(nmname, "blue", npt, 1)
+
+        for i in range(nlat):
+            offset = i * nlong
+            for j in range(nlong):
+                fvc.append(int(4))
+                if j < nlong - 1:
+                    i1 = offset+j
+                    i2 = offset+j+1
+                    i3 = offset+j+nlong+1
+                    i4 = offset+j+nlong
+                else:
+                    i1 = offset+j
+                    i2 = offset
+                    i3 = offset+nlong
+                    i4 = offset+j+nlong
+                idx.extend([i1, i2, i3, i4])
+                # print(f"i:{i} j:{j} vtxcnt:{vtxcnt} i1:{i1} i2:{i2} i3:{i3} i4:{i4}")
+
+                vtxcnt += 1
+
+        print(len(pts), len(txc), len(fvc), len(idx))
+        spheremesh.CreatePointsAttr(pts)
+        spheremesh.CreateNormalsAttr(nrm)
+        spheremesh.CreateFaceVertexCountsAttr(fvc)
+        spheremesh.CreateFaceVertexIndicesAttr(idx)
+        spheremesh.CreateExtentAttr([(-radius, -radius, -radius), (radius, radius, radius)])
+        texCoords = UsdGeom.PrimvarsAPI(spheremesh).CreatePrimvar("st",
+                                  Sdf.ValueTypeNames.TexCoord2fArray, UsdGeom.Tokens.varying)
+        texCoords.Set(txc)
+
+        # prim: Usd.Prim = self._stage.GetPrimAtPath(primpath)
+        UsdShade.MaterialBindingAPI(spheremesh).Bind(self._material)
+
+        self._total_quads += len(fvc)  # face vertex counts
+
+        return spheremesh
 
 
 # Any class derived from `omni.ext.IExt` in top level module (defined in `python.modules` of `extension.toml`) will be
@@ -21,6 +117,7 @@ class PrimsExtension(omni.ext.IExt):
     # ext_id is current extension id. It can be used with extension manager to query additional information, like where
     # this extension is located on filesystem.
     _stage = None
+    _total_quads = 0
 
     def ensure_stage(self):
         print("ensure_stage")
@@ -29,6 +126,7 @@ class PrimsExtension(omni.ext.IExt):
             print(f"ensure_stage:{self._stage}")
             UsdGeom.SetStageUpAxis(self._stage, UsdGeom.Tokens.y)
             self.create_materials()
+            self._total_quads = 0
         ppathstr = "/World/Floor"
         prim_path_sdf = Sdf.Path(ppathstr)
         prim: Usd.Prim = self._stage .GetPrimAtPath(prim_path_sdf)
@@ -68,11 +166,11 @@ class PrimsExtension(omni.ext.IExt):
         stInput = material.CreateInput('frame:stPrimvarName', Sdf.ValueTypeNames.Token)
         stInput.Set('st')
 
-        stReader.CreateInput('varname',Sdf.ValueTypeNames.Token).ConnectToSource(stInput)
+        stReader.CreateInput('varname', Sdf.ValueTypeNames.Token).ConnectToSource(stInput)
         return material
 
-    def make_preview_surface_material(self, name: str, r, g, b):
-        mtl_path = Sdf.Path(f"/World/Looks/Presurf_{name}")
+    def make_preview_surface_material(self, matname: str, r, g, b):
+        mtl_path = Sdf.Path(f"/World/Looks/Presurf_{matname}")
         mtl = UsdShade.Material.Define(self._stage, mtl_path)
         shader = UsdShade.Shader.Define(self._stage, mtl_path.AppendPath("Shader"))
         shader.CreateIdAttr("UsdPreviewSurface")
@@ -80,8 +178,9 @@ class PrimsExtension(omni.ext.IExt):
         shader.CreateInput("roughness", Sdf.ValueTypeNames.Float).Set(0.5)
         shader.CreateInput("metallic", Sdf.ValueTypeNames.Float).Set(0.0)
         mtl.CreateSurfaceOutput().ConnectToSource(shader.ConnectableAPI(), "surface")
+        self.matlib[matname] = mtl
         return mtl
-    
+
     def copy_remote_material(self, matname, urlbranch):
         url = f'http://omniverse-content-production.s3-us-west-2.amazonaws.com/Materials/{urlbranch}.mdl'
         mpath = f'/World/Looks/{matname}'
@@ -89,25 +188,30 @@ class PrimsExtension(omni.ext.IExt):
         print(f"stagetype 1 {self._stage}")
         mtl: UsdShade.Material = UsdShade.Material(self._stage.GetPrimAtPath(mpath) )
         print(f"copy_remote_material {matname} {url} {mpath} {mtl}")
+        self.matlib[matname] = mtl
+        if matname not in self._matkeys:
+            self._matkeys.append(matname)
         return mtl
 
     matlib = {}
 
     def create_materials(self):
         self.ensure_stage()
-        self.matlib["red"] = self.make_preview_surface_material("red", 1, 0, 0)
-        self.matlib["green"] = self.make_preview_surface_material("green", 0, 1, 0)
-        self.matlib["blue"] = self.make_preview_surface_material("blue", 0, 0, 1)
-        self.matlib["yellow"] = self.make_preview_surface_material("yellow", 1, 1, 0)
-        self.matlib["cyan"] = self.make_preview_surface_material("cyan", 0, 1, 1)
-        self.matlib["magenta"] = self.make_preview_surface_material("magenta", 1, 0, 1)
-        self.matlib["white"] = self.make_preview_surface_material("white", 1, 1, 1)
-        self.matlib["black"] = self.make_preview_surface_material("black", 0, 0, 0)
-        self.matlib["sunset_texture"] = self.make_preview_surface_tex_material("sunset.png")
-        self.matlib["Blue_Glass"] = self.copy_remote_material("Blue_Glass", "Base/Glass/Blue_Glass")
-        self.matlib["Red_Glass"] = self.copy_remote_material("Red_Glass", "Base/Glass/Red_Glass")
-        self.matlib["Green_Glass"] = self.copy_remote_material("Green_Glass", "Base/Glass/Green_Glass")
-        self.matlib["Clear_Glass"] = self.copy_remote_material("Clear_Glass", "Base/Glass/Clear_Glass")
+        print("Creating matierals")
+        self.make_preview_surface_material("red", 1, 0, 0)
+        self.make_preview_surface_material("green", 0, 1, 0)
+        self.make_preview_surface_material("blue", 0, 0, 1)
+        self.make_preview_surface_material("yellow", 1, 1, 0)
+        self.make_preview_surface_material("cyan", 0, 1, 1)
+        self.make_preview_surface_material("magenta", 1, 0, 1)
+        self.make_preview_surface_material("white", 1, 1, 1)
+        self.make_preview_surface_material("black", 0, 0, 0)
+        self.make_preview_surface_tex_material("sunset.png")
+        self.copy_remote_material("Blue_Glass", "Base/Glass/Blue_Glass")
+        self.copy_remote_material("Red_Glass", "Base/Glass/Red_Glass")
+        self.copy_remote_material("Green_Glass", "Base/Glass/Green_Glass")
+        self.copy_remote_material("Clear_Glass", "Base/Glass/Clear_Glass")
+        self.copy_remote_material("Mirror", "Base/Glass/Mirror")
 
     def get_curmat_mat(self):
         idx = self._matbox.get_item_value_model().as_int
@@ -149,21 +253,6 @@ class PrimsExtension(omni.ext.IExt):
         texCoords.Set([(0, 0), (1, 0), (1, 1), (0, 1)])
         return billboard
 
-    def create_marker(self, name: str, matname: str, cenpt: Gf.Vec3f, rad: float):
-        print(f"create_marker {name} {matname} {cenpt} {rad}")
-        primpath = f"/World/markers/{name}"
-        self.delete_if_exists(primpath)
-        okc.execute('CreateMeshPrimWithDefaultXform', prim_type="Sphere", prim_path=primpath)
-        sz = rad/100
-        okc.execute('TransformMultiPrimsSRTCpp',
-                    count=1,
-                    paths=[primpath],
-                    new_scales=[sz, sz, sz],
-                    new_translations=[cenpt[0], cenpt[1], cenpt[2]])
-        material = self.matlib[matname]
-        prim: Usd.Prim = self._stage.GetPrimAtPath(primpath)
-        UsdShade.MaterialBindingAPI(prim).Bind(material)
-
     def cross_product(self, v1: Gf.Vec3f, v2: Gf.Vec3f) -> Gf.Vec3f:
         x = v1[1] * v2[2] - v1[2] * v2[1]
         y = v1[2] * v2[0] - v1[0] * v2[2]
@@ -171,86 +260,29 @@ class PrimsExtension(omni.ext.IExt):
         rv = Gf.Vec3f(x, y, z)
         return rv
 
-    def create_spheremesh(self, name: str, matname: str, cenpt: Gf.Vec3f, radius: float, nlat: int, nlong: int, shownormals: bool = False):
-        # This will create nlat*nlog quads or twice that many triangles
-        # it will need nlat+1 vertices in the latitude direction and nlong vertices in the longitude direction
-        # so a total of (nlat+1)*(nlong) vertices
-        spheremesh = UsdGeom.Mesh.Define(self._stage, name)
-        vtxcnt = int(0)
-        pts = []
-        nrm = []
-        txc = []
-        vcs = []
-        idx = []
-        polegap = 0.01 # prevents the vertices from being exactly on the poles
-        for i in range(nlat+1):
-            for j in range(nlong):
-                theta = polegap + (i * (math.pi-2*polegap) / float(nlat))
-                phi = j * 2 * math.pi / float(nlong)
-                nx = math.sin(theta) * math.cos(phi)
-                ny = math.cos(theta)
-                nz = math.sin(theta) * math.sin(phi)
-                x = radius * nx
-                y = radius * ny
-                z = radius * nz
-                rawpt = Gf.Vec3f(x, y, z)
-                nrmvek = Gf.Vec3f(nx, ny, nz)
-                pt = rawpt + cenpt
-                nrm.append(nrmvek)
-                pts.append(pt)
-                txc.append((x, y))
-                if shownormals:
-                    ptname = f"ppt_{i}_{j}"
-                    npt = Gf.Vec3f(x+nx, y+ny, z+nz)
-                    nmname = f"npt_{i}_{j}"
-                    self.create_marker(ptname, "red", pt, 1)
-                    self.create_marker(nmname, "blue", npt, 1)
 
-        for i in range(nlat):
-            offset = i * nlong
-            for j in range(nlong):
-                vcs.append(int(4))
-                if j < nlong - 1:
-                    i1 = offset+j
-                    i2 = offset+j+1
-                    i3 = offset+j+nlong+1
-                    i4 = offset+j+nlong
-                else:
-                    i1 = offset+j
-                    i2 = offset
-                    i3 = offset+nlong
-                    i4 = offset+j+nlong
-                idx.extend([i1, i2, i3, i4])
-                #print(f"i:{i} j:{j} vtxcnt:{vtxcnt} i1:{i1} i2:{i2} i3:{i3} i4:{i4}")
-
-                vtxcnt += 1
-
-        print(len(pts), len(txc), len(vcs), len(idx))
-        spheremesh.CreatePointsAttr(pts)
-        spheremesh.CreateNormalsAttr(nrm)
-        spheremesh.CreateFaceVertexCountsAttr(vcs)
-        spheremesh.CreateFaceVertexIndicesAttr(idx)
-        spheremesh.CreateExtentAttr([(-radius, -radius, -radius), (radius, radius, radius)])
-        texCoords = UsdGeom.PrimvarsAPI(spheremesh).CreatePrimvar("st",
-                                  Sdf.ValueTypeNames.TexCoord2fArray, UsdGeom.Tokens.varying)
-        texCoords.Set(txc)
-
-        material = self.matlib[matname]
-        # prim: Usd.Prim = self._stage.GetPrimAtPath(primpath)
-        UsdShade.MaterialBindingAPI(spheremesh).Bind(material)
-
-        return spheremesh
-
+    org = Gf.Vec3f(0, 0, 0)
     xax = Gf.Vec3f(1, 0, 0)
     yax = Gf.Vec3f(0, 1, 0)
     zax = Gf.Vec3f(0, 0, 1)
 
-    def create_sphereflake(self, name: str, matname: str, depth: int, basept: Gf.Vec3f, cenpt: Gf.Vec3f, rad: float):
-        print(f"create_sphereflake {name} {matname} {depth} {cenpt} {rad}")
-        basename = name + "/base"
-        self.delete_if_exists(basename)
+    def create_sphereflake(self, sphflkname: str, matname: str, mxdepth: int, depth: int, basept: Gf.Vec3f, cenpt: Gf.Vec3f, rad: float, nlat: int=8, nlong: int=8 ):
 
-        self.create_spheremesh(basename, matname, cenpt,  rad, 8, 8)
+        self.delete_if_exists(sphflkname)
+        if depth == mxdepth:
+            self._total_quads = 0
+            self._start_time = time.time()
+
+        xformPrim = UsdGeom.Xform.Define(self._stage, sphflkname)
+        UsdGeom.XformCommonAPI(xformPrim).SetTranslate((0, 0, 0))
+        UsdGeom.XformCommonAPI(xformPrim).SetRotate((0, 0, 0))
+
+        meshname = sphflkname + "/SphereMesh"
+        material = self.matlib[matname]
+
+        sm = SphereMeshFactory(self._stage, material, show_normals=False)
+
+        sm.create(meshname, cenpt,  rad, nlat, nlong)
 
         offvek = cenpt - basept
         len = offvek.GetLength()
@@ -276,17 +308,22 @@ class PrimsExtension(omni.ext.IExt):
                 z = rad * math.cos(theta)
                 nrad = rad / 4
                 npt = x*lxax + y*lyax + z*lzax
-                subname = f"{basename}/sub_{i}"
-                self.create_sphereflake(subname, matname, depth-1, cenpt, cenpt+npt, nrad)
+                subname = f"{sphflkname}/sf_{i}"
+                self.create_sphereflake(subname, matname, mxdepth, depth-1, cenpt, cenpt+1.25*npt, nrad)
+
+        if depth == mxdepth:
+            elap = time.time() - self._start_time
+            print(f"create_sphereflake {sphflkname} {matname} {depth} {cenpt} {rad} totquads:{self._total_quads} in {elap:.3f} secs")
 
     def on_startup(self, ext_id):
         print("[omni.example.spawn_prims] omni example spawn_prims startup <<<<<<<<<<<<<<<<<")
         self._count = 0
         self._current_material = "Clear_Glass"
         self._matkeys = ["Clear_Glass", "Blue_Glass", "red", "green", "blue", "yellow", "cyan", "magenta", "white", "black", 
-                         "sunset_texture", "Red_Glass", "Green_Glass"]
+                         "sunset_texture", "Red_Glass", "Green_Glass", "Mirror"]
 
         self._window = ui.Window("Spawn Primitives", width=300, height=300)
+        self._total_quads = 0
 
         with self._window.frame:
             with ui.VStack():
@@ -307,16 +344,24 @@ class PrimsExtension(omni.ext.IExt):
 
                     matname = self.get_curmat_name()
                     matname = "Blue_Glass"
-                    spheremesh = self.create_spheremesh("/World/SphereMesh", matname, Gf.Vec3f(0, 0, 0), 50, 8, 8)
-                    print(f"spheremesh clicked (cwd:{os.getcwd()})")                    
+                    self.create_spheremesh("/World/SphereMesh", matname, Gf.Vec3f(0, 0, 0), 50, 8, 8)
+                    print(f"spheremesh clicked (cwd:{os.getcwd()})")                  
 
                 def on_click_sphereflake():
                     self.ensure_stage()
 
                     matname: str = self.get_curmat_name()
-                    cpt = Gf.Vec3f(0, 0, 0)
-                    sphereflake= self.create_sphereflake("/World/SphereFlake", matname, 3, cpt, cpt, 50)
-                    print(f"sphereflake clicked (cwd:{os.getcwd()})")                    
+                    sz = 50
+                    cpt = Gf.Vec3f(0, sz, 0)
+                    primpath = "/World/SphereFlake"
+                    depth = 3
+                    self.create_sphereflake(primpath, matname, depth, depth, cpt, cpt, sz)
+                    okc.execute('TransformMultiPrimsSRTCpp',
+                                count=1,
+                                paths=[primpath],
+                                new_scales=[1, 1, 1],
+                                new_translations=[0, 0, 0])          
+                    print(f"sphereflake clicked (cwd:{os.getcwd()})")
 
                 def on_click(primtype):
                     self.ensure_stage()
@@ -326,7 +371,6 @@ class PrimsExtension(omni.ext.IExt):
                     material = self.get_curmat_mat()
                     self._count += 1
 
-                    prim: Usd.Prim = self._stage.GetPrimAtPath(primpath)
                     okc.execute('TransformMultiPrimsSRTCpp',
                                 count=1,
                                 paths=[primpath],
@@ -334,6 +378,7 @@ class PrimsExtension(omni.ext.IExt):
                                 new_translations=[0, 50, 0])
 
                     print(f"on click binding:{material}")
+                    prim: Usd.Prim = self._stage.GetPrimAtPath(primpath)
                     UsdShade.MaterialBindingAPI(prim).Bind(material)
 
                 ui.Button("Spawn Cube", clicked_fn=lambda: on_click("Cube"))
