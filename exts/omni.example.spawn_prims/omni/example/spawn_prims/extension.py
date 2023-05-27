@@ -6,9 +6,10 @@ import os
 import math
 import time
 from pxr import Gf, Sdf, Usd, UsdGeom, UsdShade
-
+from typing import Tuple
 
 # fflake8: noqa
+
 
 class SphereMeshFactory():
 
@@ -32,11 +33,8 @@ class SphereMeshFactory():
                     new_translations=[cenpt[0], cenpt[1], cenpt[2]])
         prim: Usd.Prim = self._stage.GetPrimAtPath(primpath)
         UsdShade.MaterialBindingAPI(prim).Bind(self._material)
-
     
     _show_normals = False
-
-
 
     def create(self, name: str, cenpt: Gf.Vec3f, radius: float, nlat: int, nlong: int):
         # This will create nlat*nlog quads or twice that many triangles
@@ -99,7 +97,8 @@ class SphereMeshFactory():
         spheremesh.CreateFaceVertexIndicesAttr(idx)
         spheremesh.CreateExtentAttr([(-radius, -radius, -radius), (radius, radius, radius)])
         texCoords = UsdGeom.PrimvarsAPI(spheremesh).CreatePrimvar("st",
-                                  Sdf.ValueTypeNames.TexCoord2fArray, UsdGeom.Tokens.varying)
+                                                                  Sdf.ValueTypeNames.TexCoord2fArray,
+                                                                  UsdGeom.Tokens.varying)
         texCoords.Set(txc)
 
         # prim: Usd.Prim = self._stage.GetPrimAtPath(primpath)
@@ -137,12 +136,12 @@ class PrimsExtension(omni.ext.IExt):
                         paths=[ppathstr],
                         new_scales=[5, 1, 5])
 
-    def make_preview_surface_tex_material(self, fname):
+    def make_preview_surface_tex_material(self, matname: str, fname: str):
         # This is all materials
         matpath = "/World/Looks"
-        matname = f'{matpath}/boardMat_{fname.replace(".","_")}'
-        material = UsdShade.Material.Define(self._stage, matname)
-        pbrShader = UsdShade.Shader.Define(self._stage, f'{matname}/PBRShader')
+        mlname = f'{matpath}/boardMat_{fname.replace(".","_")}'
+        material = UsdShade.Material.Define(self._stage, mlname)
+        pbrShader = UsdShade.Shader.Define(self._stage, f'{mlname}/PBRShader')
         pbrShader.CreateIdAttr("UsdPreviewSurface")
         pbrShader.CreateInput("roughness", Sdf.ValueTypeNames.Float).Set(0.4)
         pbrShader.CreateInput("metallic", Sdf.ValueTypeNames.Float).Set(0.0)
@@ -167,57 +166,81 @@ class PrimsExtension(omni.ext.IExt):
         stInput.Set('st')
 
         stReader.CreateInput('varname', Sdf.ValueTypeNames.Token).ConnectToSource(stInput)
+        self.matlib[matname]["mat"] = material
         return material
 
-    def make_preview_surface_material(self, matname: str, r, g, b):
+    def splitrgb(self, rgb: str) -> Tuple[float, float, float]:
+        sar = rgb.split(",")
+        r = float(sar[0])
+        g = float(sar[1])
+        b = float(sar[2])
+        return (r, g, b)
+
+    def make_preview_surface_material(self, matname: str, rgb:str ):
         mtl_path = Sdf.Path(f"/World/Looks/Presurf_{matname}")
         mtl = UsdShade.Material.Define(self._stage, mtl_path)
         shader = UsdShade.Shader.Define(self._stage, mtl_path.AppendPath("Shader"))
         shader.CreateIdAttr("UsdPreviewSurface")
-        shader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color3f).Set((r, g, b))
+        rgbtup = self.splitrgb(rgb)
+        shader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color3f).Set(rgbtup)
         shader.CreateInput("roughness", Sdf.ValueTypeNames.Float).Set(0.5)
         shader.CreateInput("metallic", Sdf.ValueTypeNames.Float).Set(0.0)
         mtl.CreateSurfaceOutput().ConnectToSource(shader.ConnectableAPI(), "surface")
-        self.matlib[matname] = mtl
+        # self.matlib[matname] = {"name": matname, "typ": "mtl", "mat": mtl}
+        self.matlib[matname]["mat"] = mtl
         return mtl
 
     def copy_remote_material(self, matname, urlbranch):
+        print("copy_remote_material")
         url = f'http://omniverse-content-production.s3-us-west-2.amazonaws.com/Materials/{urlbranch}.mdl'
         mpath = f'/World/Looks/{matname}'
         okc.execute('CreateMdlMaterialPrimCommand', mtl_url=url, mtl_name=matname, mtl_path=mpath)
         print(f"stagetype 1 {self._stage}")
         mtl: UsdShade.Material = UsdShade.Material(self._stage.GetPrimAtPath(mpath) )
         print(f"copy_remote_material {matname} {url} {mpath} {mtl}")
-        self.matlib[matname] = mtl
+        # self.matlib[matname] = {"name": matname, "typ": "rgb", "mat": mtl}
+        self.matlib[matname]["mat"] = mtl
         if matname not in self._matkeys:
             self._matkeys.append(matname)
         return mtl
+
+    def setup_material(self, matname: str, typ: str, spec: str):
+        print(f"setup_material {matname} {typ} {spec}")
+        matpath = f"/World/Looks/{matname}"
+        self.matlib[matname] = {"name": matname, "typ": typ, "mat": None, "path": matpath}
+        if typ == "mtl":
+            self.copy_remote_material(matname, spec)
+        elif typ == "tex":
+            self.make_preview_surface_tex_material(matname, spec)
+        else:
+            self.make_preview_surface_material(matname, spec)
 
     matlib = {}
 
     def create_materials(self):
         self.ensure_stage()
-        print("Creating matierals")
-        self.make_preview_surface_material("red", 1, 0, 0)
-        self.make_preview_surface_material("green", 0, 1, 0)
-        self.make_preview_surface_material("blue", 0, 0, 1)
-        self.make_preview_surface_material("yellow", 1, 1, 0)
-        self.make_preview_surface_material("cyan", 0, 1, 1)
-        self.make_preview_surface_material("magenta", 1, 0, 1)
-        self.make_preview_surface_material("white", 1, 1, 1)
-        self.make_preview_surface_material("black", 0, 0, 0)
-        self.make_preview_surface_tex_material("sunset.png")
-        self.copy_remote_material("Blue_Glass", "Base/Glass/Blue_Glass")
-        self.copy_remote_material("Red_Glass", "Base/Glass/Red_Glass")
-        self.copy_remote_material("Green_Glass", "Base/Glass/Green_Glass")
-        self.copy_remote_material("Clear_Glass", "Base/Glass/Clear_Glass")
-        self.copy_remote_material("Mirror", "Base/Glass/Mirror")
+        print("Creating materials")
+        self.setup_material("red", "rgb", "1,0,0")
+        self.setup_material("green", "rgb", "0,1,0")
+        self.setup_material("blue", "rgb", "0,0,1")
+        self.setup_material("yellow", "rgb", "1,1,0")
+        self.setup_material("cyan", "rgb", "0,1,1")
+        self.setup_material("magenta", "rgb", "1,0,1")
+        self.setup_material("white", "rgb", "1,1,1")
+        self.setup_material("black", "rgb", "0,0,0")
+        self.setup_material("Blue_Glass",  "mtl", "Base/Glass/Blue_Glass")
+        self.setup_material("Red_Glass", "mtl", "Base/Glass/Red_Glass")
+        self.setup_material("Green_Glass", "mtl", "Base/Glass/Green_Glass")
+        self.setup_material("Clear_Glass", "mtl", "Base/Glass/Clear_Glass")
+        self.setup_material("Mirror", "mtl", "Base/Glass/Mirror")
+        self.setup_material("sunset_texture", "tex", "sunset.png")
+        # self._matbox.set_item_value_model(self._matkeys[0])
 
     def get_curmat_mat(self):
         idx = self._matbox.get_item_value_model().as_int
         key = self._matkeys[idx]
         if key in self.matlib:
-            rv = self.matlib[key]
+            rv = self.matlib[key]["mat"]
         else:
             rv = None
 
@@ -236,7 +259,7 @@ class PrimsExtension(omni.ext.IExt):
         rv = f"/World/Looks/{matname}"
         print(f"get_curmat_path:{idx}  {rv}")
         return rv
-    
+
     def delete_if_exists(self, primpath):
         if self._stage.GetPrimAtPath(primpath):
             okc.execute("DeletePrimsCommand", paths=[primpath])  
@@ -249,7 +272,8 @@ class PrimsExtension(omni.ext.IExt):
         billboard.CreateFaceVertexCountsAttr([4])
         billboard.CreateFaceVertexIndicesAttr([0, 1, 2, 3])
         billboard.CreateExtentAttr([(-430, -145, 0), (430, 145, 0)])
-        texCoords = UsdGeom.PrimvarsAPI(billboard).CreatePrimvar("st", Sdf.ValueTypeNames.TexCoord2fArray, UsdGeom.Tokens.varying)
+        texCoords = UsdGeom.PrimvarsAPI(billboard).CreatePrimvar("st", Sdf.ValueTypeNames.TexCoord2fArray,
+                                                                 UsdGeom.Tokens.varying)
         texCoords.Set([(0, 0), (1, 0), (1, 1), (0, 1)])
         return billboard
 
@@ -259,7 +283,6 @@ class PrimsExtension(omni.ext.IExt):
         z = v1[0] * v2[1] - v1[1] * v2[0]
         rv = Gf.Vec3f(x, y, z)
         return rv
-
 
     org = Gf.Vec3f(0, 0, 0)
     xax = Gf.Vec3f(1, 0, 0)
@@ -278,7 +301,7 @@ class PrimsExtension(omni.ext.IExt):
         UsdGeom.XformCommonAPI(xformPrim).SetRotate((0, 0, 0))
 
         meshname = sphflkname + "/SphereMesh"
-        material = self.matlib[matname]
+        material = self.matlib[matname]["mat"]
 
         sm = SphereMeshFactory(self._stage, material, show_normals=False)
 
@@ -317,11 +340,12 @@ class PrimsExtension(omni.ext.IExt):
 
     def on_startup(self, ext_id):
         print("[omni.example.spawn_prims] omni example spawn_prims startup <<<<<<<<<<<<<<<<<")
+        print(f"on_startup - stage:{omni.usd.get_context().get_stage()}")
         self._count = 0
         self._current_material = "Clear_Glass"
+        # self._matkeys = [self._current_material]
         self._matkeys = ["Clear_Glass", "Blue_Glass", "red", "green", "blue", "yellow", "cyan", "magenta", "white", "black", 
-                         "sunset_texture", "Red_Glass", "Green_Glass", "Mirror"]
-
+                          "sunset_texture", "Red_Glass", "Green_Glass", "Mirror"]
         self._window = ui.Window("Spawn Primitives", width=300, height=300)
         self._total_quads = 0
 
