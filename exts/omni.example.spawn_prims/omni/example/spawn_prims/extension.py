@@ -29,8 +29,8 @@ class SphereMeshFactory():
 
     _show_normals = False
 
-    def __init__(self, stage, matman, show_normals=False) -> None:
-        self._stage = stage
+    def __init__(self, matman, show_normals=False) -> None:
+        self._stage = omni.usd.get_context().get_stage()
         self._matman = matman
         self._show_normals = show_normals
         self._total_quads = 0
@@ -132,10 +132,11 @@ class SphereFlakeFactory():
     yax = Gf.Vec3f(0, 1, 0)
     zax = Gf.Vec3f(0, 0, 1)
 
-    def __init__(self, stage, matman) -> None:
-        self._stage = stage
+    def __init__(self, matman) -> None:
+        self._stage = omni.usd.get_context().get_stage()
         self._matman = matman
         self._total_quads = 0
+        self._smf = SphereMeshFactory(self._matman, show_normals=False)        
         pass
 
     def Create(self, sphflkname: str, matname: str, mxdepth: int, depth: int, basept: Gf.Vec3f,
@@ -152,9 +153,7 @@ class SphereFlakeFactory():
 
         meshname = sphflkname + "/SphereMesh"
 
-        sm = SphereMeshFactory(self._stage, self._matman, show_normals=False)
-
-        sm.Create(meshname, matname, cenpt,  rad, nlat, nlong)
+        self._smf.Create(meshname, matname, cenpt,  rad, nlat, nlong)
 
         offvek = cenpt - basept
         len = offvek.GetLength()
@@ -390,19 +389,20 @@ class PrimsExtension(omni.ext.IExt):
 
                 def on_click_spheremesh():
                     self.ensure_stage()
+
+                    sm = SphereMeshFactory(self._matman)
+
                     matname = self.get_curmat_name()
-
-                    sm = SphereMeshFactory(self._stage, self._matman)
-
                     sz = 50
                     cpt = Gf.Vec3f(0, sz, 0)
-                    sm.Create("/World/SphereMesh", matname, cpt, sz, 8, 8)
+                    primpath = "/World/SphereMesh"
+                    sm.Create(primpath, matname, cpt, sz, 8, 8)
                     print(f"spheremesh clicked (cwd:{os.getcwd()})")                  
 
                 def on_click_sphereflake():
                     self.ensure_stage()
 
-                    sff = SphereFlakeFactory(self._stage, self._matman)
+                    sff = SphereFlakeFactory(self._matman)
 
                     matname = self.get_curmat_name()
                     sz = 50
