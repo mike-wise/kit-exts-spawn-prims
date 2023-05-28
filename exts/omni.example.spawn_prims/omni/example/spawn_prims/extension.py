@@ -33,7 +33,7 @@ class SphereMeshFactory():
                     new_translations=[cenpt[0], cenpt[1], cenpt[2]])
         prim: Usd.Prim = self._stage.GetPrimAtPath(primpath)
         UsdShade.MaterialBindingAPI(prim).Bind(self._material)
-    
+
     _show_normals = False
 
     def create(self, name: str, cenpt: Gf.Vec3f, radius: float, nlat: int, nlong: int):
@@ -118,14 +118,7 @@ class PrimsExtension(omni.ext.IExt):
     _stage = None
     _total_quads = 0
 
-    def ensure_stage(self):
-        print("ensure_stage")
-        if self._stage is None:
-            self._stage = omni.usd.get_context().get_stage()
-            print(f"ensure_stage:{self._stage}")
-            UsdGeom.SetStageUpAxis(self._stage, UsdGeom.Tokens.y)
-            self.create_materials()
-            self._total_quads = 0
+    def make_initial_scene(self):
         ppathstr = "/World/Floor"
         prim_path_sdf = Sdf.Path(ppathstr)
         prim: Usd.Prim = self._stage .GetPrimAtPath(prim_path_sdf)
@@ -135,6 +128,22 @@ class PrimsExtension(omni.ext.IExt):
                         count=1,
                         paths=[ppathstr],
                         new_scales=[5, 1, 5])
+            baseurl = 'https://omniverse-content-production.s3.us-west-2.amazonaws.com'
+            okc.execute('CreateDynamicSkyCommand',
+                            sky_url=f'{baseurl}/Assets/Skies/2022_1/Skies/Dynamic/CumulusLight.usd',
+                            sky_path='/Environment/sky')
+
+    def ensure_stage(self):
+        print("ensure_stage")
+        if self._stage is None:
+            self._stage = omni.usd.get_context().get_stage()
+            print(f"ensure_stage:{self._stage}")
+            UsdGeom.SetStageUpAxis(self._stage, UsdGeom.Tokens.y)
+            self._total_quads = 0
+            self.make_initial_scene()
+
+# Start of matman
+    matlib = {}
 
     def make_preview_surface_tex_material(self, matname: str, fname: str):
         # This is all materials
@@ -158,9 +167,11 @@ class PrimsExtension(omni.ext.IExt):
         # print(texfile)
         # print(os.path.exists(texfile))
         diffuseTextureSampler.CreateInput('file', Sdf.ValueTypeNames.Asset).Set(texfile)
-        diffuseTextureSampler.CreateInput("st", Sdf.ValueTypeNames.Float2).ConnectToSource(stReader.ConnectableAPI(), 'result')
+        diffuseTextureSampler.CreateInput("st", Sdf.ValueTypeNames.Float2).ConnectToSource(stReader.ConnectableAPI(),
+                                                                                           'result')
         diffuseTextureSampler.CreateOutput('rgb', Sdf.ValueTypeNames.Float3)
-        pbrShader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color3f).ConnectToSource(diffuseTextureSampler.ConnectableAPI(), 'rgb')                    
+        pbrShader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color3f).ConnectToSource(
+            diffuseTextureSampler.ConnectableAPI(), 'rgb')
 
         stInput = material.CreateInput('frame:stPrimvarName', Sdf.ValueTypeNames.Token)
         stInput.Set('st')
@@ -192,7 +203,8 @@ class PrimsExtension(omni.ext.IExt):
 
     def copy_remote_material(self, matname, urlbranch):
         print("copy_remote_material")
-        url = f'http://omniverse-content-production.s3-us-west-2.amazonaws.com/Materials/{urlbranch}.mdl'
+        baseurl = 'https://omniverse-content-production.s3.us-west-2.amazonaws.com'
+        url = f'{baseurl}/Materials/{urlbranch}.mdl'
         mpath = f'/World/Looks/{matname}'
         okc.execute('CreateMdlMaterialPrimCommand', mtl_url=url, mtl_name=matname, mtl_path=mpath)
         print(f"stagetype 1 {self._stage}")
@@ -204,22 +216,28 @@ class PrimsExtension(omni.ext.IExt):
             self._matkeys.append(matname)
         return mtl
 
-    def setup_material(self, matname: str, typ: str, spec: str):
-        print(f"setup_material {matname} {typ} {spec}")
-        matpath = f"/World/Looks/{matname}"
-        self.matlib[matname] = {"name": matname, "typ": typ, "mat": None, "path": matpath}
+    def realize_material(self, matname: str):
+        typ = self.matlib[matname]["typ"]
+        spec = self.matlib[matname]["spec"]
         if typ == "mtl":
             self.copy_remote_material(matname, spec)
         elif typ == "tex":
             self.make_preview_surface_tex_material(matname, spec)
         else:
             self.make_preview_surface_material(matname, spec)
+        self.matlib[matname]["realized"] = True
 
-    matlib = {}
+    def setup_material(self, matname: str, typ: str, spec: str):
+        print(f"setup_material {matname} {typ} {spec}")
+        matpath = f"/World/Looks/{matname}"
+        self.matlib[matname] = {"name": matname,
+                                "typ": typ,
+                                "mat": None,
+                                "path": matpath,
+                                "realized": False,
+                                "spec": spec}
 
     def create_materials(self):
-        self.ensure_stage()
-        print("Creating materials")
         self.setup_material("red", "rgb", "1,0,0")
         self.setup_material("green", "rgb", "0,1,0")
         self.setup_material("blue", "rgb", "0,0,1")
@@ -234,17 +252,20 @@ class PrimsExtension(omni.ext.IExt):
         self.setup_material("Clear_Glass", "mtl", "Base/Glass/Clear_Glass")
         self.setup_material("Mirror", "mtl", "Base/Glass/Mirror")
         self.setup_material("sunset_texture", "tex", "sunset.png")
-        # self._matbox.set_item_value_model(self._matkeys[0])
 
     def get_curmat_mat(self):
         idx = self._matbox.get_item_value_model().as_int
         key = self._matkeys[idx]
+        rv = self.get_material(key)
+        return rv
+    
+    def get_material(self, key):
         if key in self.matlib:
+            if not self.matlib[key]["realized"]:
+                self.realize_material(key)
             rv = self.matlib[key]["mat"]
         else:
             rv = None
-
-        print(f"get_curmat_mat:{idx} {key} {rv}")
         return rv
 
     def get_curmat_name(self):
@@ -259,6 +280,7 @@ class PrimsExtension(omni.ext.IExt):
         rv = f"/World/Looks/{matname}"
         print(f"get_curmat_path:{idx}  {rv}")
         return rv
+# end of matman
 
     def delete_if_exists(self, primpath):
         if self._stage.GetPrimAtPath(primpath):
@@ -301,7 +323,7 @@ class PrimsExtension(omni.ext.IExt):
         UsdGeom.XformCommonAPI(xformPrim).SetRotate((0, 0, 0))
 
         meshname = sphflkname + "/SphereMesh"
-        material = self.matlib[matname]["mat"]
+        material = self.get_material(matname)
 
         sm = SphereMeshFactory(self._stage, material, show_normals=False)
 
@@ -342,10 +364,10 @@ class PrimsExtension(omni.ext.IExt):
         print("[omni.example.spawn_prims] omni example spawn_prims startup <<<<<<<<<<<<<<<<<")
         print(f"on_startup - stage:{omni.usd.get_context().get_stage()}")
         self._count = 0
-        self._current_material = "Clear_Glass"
+        self.create_materials()
+        self._current_material = "Mirror"
         # self._matkeys = [self._current_material]
-        self._matkeys = ["Clear_Glass", "Blue_Glass", "red", "green", "blue", "yellow", "cyan", "magenta", "white", "black", 
-                          "sunset_texture", "Red_Glass", "Green_Glass", "Mirror"]
+        self._matkeys = list(self.matlib.keys())
         self._window = ui.Window("Spawn Primitives", width=300, height=300)
         self._total_quads = 0
 
@@ -416,7 +438,10 @@ class PrimsExtension(omni.ext.IExt):
                 ui.Button("Spawn ShereMesh", clicked_fn=lambda: on_click_spheremesh())
                 ui.Button("Spawn ShereFlake", clicked_fn=lambda: on_click_sphereflake())
 
-                self._matbox = ui.ComboBox(0, *self._matkeys).model
+                idx = self._matkeys.index(self._current_material)
+                if idx < 0:
+                    idx = 0
+                self._matbox = ui.ComboBox(idx, *self._matkeys).model
 
     def on_shutdown(self):
         print("[omni.example.spawn_prims] omni example spawn_prims shutdown")
