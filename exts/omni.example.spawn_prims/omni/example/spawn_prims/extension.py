@@ -4,6 +4,7 @@ import omni.kit.commands as okc
 import omni.usd
 import os
 import time
+import asyncio
 from pxr import Gf, Sdf, Usd, UsdGeom, UsdShade
 from .ovut import MatMan, SphereMeshFactory, SphereFlakeFactory, delete_if_exists
 
@@ -70,7 +71,7 @@ class PrimsExtension(omni.ext.IExt):
         print(f"on_startup - stage:{omni.usd.get_context().get_stage()}")
         self._matman = MatMan()
         self._count = 0
-        self._current_material = "Mirror"
+        self._current_material_name = "Mirror"
         self._matkeys = self._matman.GetMaterialNames()
         self._window = ui.Window("Spawn Primitives", width=300, height=300)
         self._total_quads = 0
@@ -87,6 +88,8 @@ class PrimsExtension(omni.ext.IExt):
         self._prims_created = []
         self._nsf_x = 1
         self._nsf_z = 1
+        self._sf_gen_modes = ["DirectMesh", "AsyncMesh", "UsdSphere"]
+        self._sf_gen_mode = "DirectMesh"
 
         with self._window.frame:
             with ui.VStack():
@@ -114,10 +117,13 @@ class PrimsExtension(omni.ext.IExt):
                     sm.CreateMesh(primpath, matname, cpt, sz)
                     self._prims_created.append(primpath)
 
-                def on_click_sphereflake():
+                def on_click_sphereflake():                   
                     self.ensure_stage()
+                    genmode = self.get_sf_genmode()
 
-                    sff = SphereFlakeFactory(self._matman,  nlat=self._sf_nlat, nlong=self._sf_nlng)
+                    sff = SphereFlakeFactory(self._matman, genmode,  nlat=self._sf_nlat, nlong=self._sf_nlng)
+
+                    genmode = self.get_sf_genmode()
 
                     matname = self.get_curmat_name()
                     sz = 50
@@ -131,8 +137,10 @@ class PrimsExtension(omni.ext.IExt):
                     self._prims_created.append(primpath)
                     UpdateNQuads()
 
-                def gensflakes():
-                    sff = SphereFlakeFactory(self._matman,  nlat=self._sf_nlat, nlong=self._sf_nlng)
+                async def gensflakes():
+                    genmode = self.get_sf_genmode()
+                    sff = SphereFlakeFactory(self._matman, genmode,  nlat=self._sf_nlat, nlong=self._sf_nlng)
+                    await asyncio.sleep(1)
 
                     matname = self.get_curmat_name()
                     sz = 50
@@ -148,13 +156,14 @@ class PrimsExtension(omni.ext.IExt):
                             cpt = Gf.Vec3f((ix-ixoff)*sz*3, sz, (iz-izoff)*sz*3)
                             sff.Generate(primpath, matname, depth, depth, cpt, sz)
                             self._prims_created.append(primpath)
+                            # await asyncio.sleep(1)
 
-                def on_click_multi_sphereflake():
+                async def on_click_multi_sphereflake():
                     self.ensure_stage()
                     self.setup_environment(force=True)
 
                     start_time = time.time()
-                    gensflakes()
+                    await gensflakes()
                     elap = time.time() - start_time
 
                     nflakes = self._nsf_x * self._nsf_z
@@ -261,29 +270,44 @@ class PrimsExtension(omni.ext.IExt):
                             
                     with ui.HStack():
                         self._msf_spawn_but = ui.Button("Multi ShereFlake", clicked_fn=
-                                                        lambda: on_click_multi_sphereflake())
+                                                        lambda: asyncio.ensure_future(on_click_multi_sphereflake()))
                         with ui.VStack():
                             self._nsf_x_but = ui.Button(f"SF x: {self._nsf_x}", clicked_fn=lambda: on_click_sfx())
                             self._nsf_z_but = ui.Button(f"SF z: {self._nsf_z}", clicked_fn=lambda: on_click_sfz())
                 UpdateNQuads()
                 UpdateMQuads()
 
-                idx = self._matkeys.index(self._current_material)
+                # Material Combo Box
+                idx = self._matkeys.index(self._current_material_name)
                 if idx < 0:
                     idx = 0
                 self._matbox = ui.ComboBox(idx, *self._matkeys).model
+
+                # SF Gen Mode Combo Box
+                idx = self._sf_gen_modes.index(self._sf_gen_mode)
+                if idx < 0:
+                    idx = 0
+                self._genmodebox = ui.ComboBox(idx, *self._sf_gen_modes).model
+
                 self._statuslable = ui.Label("Status: Ready")
 
     def get_curmat_mat(self):
         idx = self._matbox.get_item_value_model().as_int
-        key = self._matkeys[idx]
-        rv = self._matman.GetMaterial(key)
+        self._current_material_name = self._matkeys[idx]
+        rv = self._matman.GetMaterial(self._current_material_name)
         return rv
 
     def get_curmat_name(self):
         idx = self._matbox.get_item_value_model().as_int
-        rv = self._matkeys[idx]
+        self._current_material_name = self._matkeys[idx]
+        rv = self._current_material_name
         return rv
+    
+    def get_sf_genmode(self):
+        idx = self._genmodebox.get_item_value_model().as_int
+        self._sf_genmode = self._sf_gen_modes[idx]
+        rv = self._sf_genmode
+        return rv    
 
     def on_shutdown(self):
         print("[omni.example.spawn_prims] omni example spawn_prims shutdown")

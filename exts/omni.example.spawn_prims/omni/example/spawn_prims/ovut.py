@@ -297,9 +297,10 @@ class SphereFlakeFactory():
     yax = Gf.Vec3f(0, 1, 0)
     zax = Gf.Vec3f(0, 0, 1)
 
-    def __init__(self, matman,  nlat, nlong) -> None:
+    def __init__(self, matman, genmode: str,  nlat: int, nlong: int) -> None:
         self._stage = omni.usd.get_context().get_stage()
         self._matman = matman
+        self._genmode = genmode
         self._nlat = nlat
         self._nlng = nlong
         self._smf = SphereMeshFactory(self._matman,  nlat, nlong, show_normals=False)
@@ -339,15 +340,15 @@ class SphereFlakeFactory():
         UsdGeom.XformCommonAPI(xformPrim).SetRotate((0, 0, 0))
 
         basept = cenpt
-        self.Create(sphflkname, matname, mxdepth, depth, basept, cenpt, rad)
+        self.GenRecursively(sphflkname, matname, mxdepth, depth, basept, cenpt, rad)
 
         elap = time.time() - self._start_time
         print(f"GenerateSF {sphflkname} {matname} {depth} {cenpt} totquads:{self._total_quads} in {elap:.3f} secs")
 
         latest_sf_gen_time = elap
 
-    def Create(self, sphflkname: str, matname: str, mxdepth: int, depth: int, basept: Gf.Vec3f,
-               cenpt: Gf.Vec3f, rad: float):
+    def GenRecursively(self, sphflkname: str, matname: str, mxdepth: int, depth: int, basept: Gf.Vec3f,
+                       cenpt: Gf.Vec3f, rad: float):
 
         # xformPrim = UsdGeom.Xform.Define(self._stage, sphflkname)
         # UsdGeom.XformCommonAPI(xformPrim).SetTranslate((0, 0, 0))
@@ -357,10 +358,22 @@ class SphereFlakeFactory():
 
         # spheremesh = UsdGeom.Mesh.Define(self._stage, meshname)
 
-        asyncio.ensure_future(self._smf.CreateMeshAsync(meshname, matname, cenpt,  rad))
-        # self._smf.CreateMesh(meshname, matname, cenpt,  rad)
-        # self._smf.CreateMesh(meshname+"1", matname, cenpt,  rad)
-
+        if self._genmode == "AsyncMesh":
+            asyncio.ensure_future(self._smf.CreateMeshAsync(meshname, matname, cenpt,  rad))
+        elif self._genmode == "DirectMesh":
+            self._smf.CreateMesh(meshname, matname, cenpt,  rad)
+        elif self._genmode == "UsdSphere":
+            meshname = sphflkname + "/UsdSphere"
+            okc.execute('CreateMeshPrimWithDefaultXform',	prim_type="Sphere", prim_path=meshname)
+            okc.execute('TransformMultiPrimsSRTCpp',
+                        count=1,
+                        paths=[meshname],
+                        new_scales=[rad/50, rad/50, rad/50],
+                        new_translations=[cenpt[0], cenpt[1], cenpt[2]])
+            mtl = self._matman.GetMaterial(matname)
+            prim: Usd.Prim = self._stage.GetPrimAtPath(meshname)
+            UsdShade.MaterialBindingAPI(prim).Bind(mtl)
+            
         offvek = cenpt - basept
         len = offvek.GetLength()
         if len > 0:
@@ -386,7 +399,7 @@ class SphereFlakeFactory():
                 z = rad * math.cos(theta)
                 npt = x*lxax + y*lyax + z*lzax
                 subname = f"{sphflkname}/sf_{i}"
-                self.Create(subname, matname, mxdepth, depth-1, cenpt, cenpt+1.25*npt, nrad)
+                self.GenRecursively(subname, matname, mxdepth, depth-1, cenpt, cenpt+1.25*npt, nrad)
 
 
 class MatMan():
