@@ -297,10 +297,11 @@ class SphereFlakeFactory():
     yax = Gf.Vec3f(0, 1, 0)
     zax = Gf.Vec3f(0, 0, 1)
 
-    def __init__(self, matman, genmode: str,  nlat: int, nlong: int, radratio: float) -> None:
+    def __init__(self, matman, genmode: str, genform: str,  nlat: int, nlong: int, radratio: float) -> None:
         self._stage = omni.usd.get_context().get_stage()
         self._matman = matman
         self._genmode = genmode
+        self._genform = genform
         self._nlat = nlat
         self._nlng = nlong
         self._radratio = radratio
@@ -390,8 +391,8 @@ class SphereFlakeFactory():
             UsdShade.MaterialBindingAPI(spheremesh).Bind(mtl)
 
         if depth > 0:
-            scheme = "classic"
-            if scheme == "classic":
+            form = self._genform
+            if form == "Classic":
                 thoff = 0
                 phioff = -20*math.pi/180
                 self._nring = 6

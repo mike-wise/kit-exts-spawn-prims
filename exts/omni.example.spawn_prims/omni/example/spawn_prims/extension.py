@@ -96,6 +96,8 @@ class PrimsExtension(omni.ext.IExt):
         self._nsf_z = 1
         self._sf_gen_modes = ["DirectMesh", "AsyncMesh", "OmniSphere", "UsdSphere"]
         self._sf_gen_mode = "UsdSphere"
+        self._sf_gen_forms = ["Classic", "Flat-8"]
+        self._sf_gen_form = "Classic"
 
         with self._window.frame:
             with ui.VStack():
@@ -123,14 +125,13 @@ class PrimsExtension(omni.ext.IExt):
                     sm.CreateMesh(primpath, matname, cpt, sz)
                     self._prims_created.append(primpath)
 
-                def on_click_sphereflake():                   
+                def on_click_sphereflake():
                     self.ensure_stage()
                     genmode = self.get_sf_genmode()
+                    genform = self.get_sf_genform()
                     start_time = time.time()
 
-                    sff = SphereFlakeFactory(self._matman, genmode,  self._sf_nlat, self._sf_nlng, self._sf_radratio)
-
-                    genmode = self.get_sf_genmode()
+                    sff = SphereFlakeFactory(self._matman, genmode, genform,  self._sf_nlat, self._sf_nlng, self._sf_radratio)
 
                     matname = self.get_curmat_name()
                     sz = 50
@@ -149,7 +150,8 @@ class PrimsExtension(omni.ext.IExt):
 
                 async def gensflakes():
                     genmode = self.get_sf_genmode()
-                    sff = SphereFlakeFactory(self._matman, genmode,  nlat=self._sf_nlat, nlong=self._sf_nlng)
+                    genform = self.get_sf_genform()
+                    sff = SphereFlakeFactory(self._matman, genmode, genform,  self._sf_nlat, self._sf_nlng, self._sf_radratio)
                     await asyncio.sleep(1)
 
                     matname = self.get_curmat_name()
@@ -260,12 +262,16 @@ class PrimsExtension(omni.ext.IExt):
                     self._sf_primtospawn_but.text = f"{self._curprim}"
 
                 def UpdateNQuads():
-                    ntris, nprims = SphereFlakeFactory.CalcTrisAndPrims(self._sf_depth, 8, self._sf_nlat, self._sf_nlng)
+                    genform = self.get_sf_genform()
+                    nring = 9 if genform == "Classic" else 8
+                    ntris, nprims = SphereFlakeFactory.CalcTrisAndPrims(self._sf_depth, nring, self._sf_nlat, self._sf_nlng)
                     elap = SphereFlakeFactory.GetLastGenTime()
                     self._sf_spawn_but.text = f"Spawn ShereFlake\n tris:{ntris:,} prims:{nprims:,}\ngen: {elap:.2f} s"
 
                 def UpdateMQuads():
-                    ntris, nprims = SphereFlakeFactory.CalcTrisAndPrims(self._sf_depth, 8, self._sf_nlat, self._sf_nlng)
+                    genform = self.get_sf_genform()
+                    nring = 9 if genform == "Classic" else 8
+                    ntris, nprims = SphereFlakeFactory.CalcTrisAndPrims(self._sf_depth, nring, self._sf_nlat, self._sf_nlng)
                     tottris = ntris*self._nsf_x*self._nsf_z
                     self._msf_spawn_but.text = f"Multi ShereFlake\ntris:{tottris:,} prims:{nprims:,}"
 
@@ -281,6 +287,24 @@ class PrimsExtension(omni.ext.IExt):
                     self._memlabel.text = msg
 
                 print(f"PYTHONPATH:{sys.path}")
+
+                # Material Combo Box
+                idx = self._matkeys.index(self._current_material_name)
+                if idx < 0:
+                    idx = 0
+                self._matbox = ui.ComboBox(idx, *self._matkeys).model
+
+                # SF Gen Mode Combo Box
+                idx = self._sf_gen_modes.index(self._sf_gen_mode)
+                if idx < 0:
+                    idx = 0
+                self._genmodebox = ui.ComboBox(idx, *self._sf_gen_modes).model
+
+                # SF Form Combo Box
+                idx = self._sf_gen_forms.index(self._sf_gen_form)
+                if idx < 0:
+                    idx = 0
+                self._genformbox = ui.ComboBox(idx, *self._sf_gen_forms).model                    
 
                 ui.Button("Clear Prims", clicked_fn=lambda: on_click_clearprims())
                 ui.Button()
@@ -311,17 +335,7 @@ class PrimsExtension(omni.ext.IExt):
                 UpdateNQuads()
                 UpdateMQuads()
 
-                # Material Combo Box
-                idx = self._matkeys.index(self._current_material_name)
-                if idx < 0:
-                    idx = 0
-                self._matbox = ui.ComboBox(idx, *self._matkeys).model
-
-                # SF Gen Mode Combo Box
-                idx = self._sf_gen_modes.index(self._sf_gen_mode)
-                if idx < 0:
-                    idx = 0
-                self._genmodebox = ui.ComboBox(idx, *self._sf_gen_modes).model
+ 
 
                 self._statuslabel = ui.Label("Status: Ready")
                 self._memlabel = ui.Button("Memory tot/used/free", clicked_fn=UpdateGpuMemory)
@@ -342,6 +356,12 @@ class PrimsExtension(omni.ext.IExt):
         idx = self._genmodebox.get_item_value_model().as_int
         self._sf_genmode = self._sf_gen_modes[idx]
         rv = self._sf_genmode
+        return rv
+
+    def get_sf_genform(self):
+        idx = self._genformbox.get_item_value_model().as_int
+        self._sf_genform = self._sf_gen_forms[idx]
+        rv = self._sf_genform
         return rv
 
     def on_shutdown(self):
