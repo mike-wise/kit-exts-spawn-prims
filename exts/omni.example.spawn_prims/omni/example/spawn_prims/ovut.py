@@ -132,7 +132,7 @@ class SphereMeshFactory():
 
     _show_normals = False
 
-    def __init__(self, matman, nlat: int, nlng: int, show_normals: bool=False, do_text_coords: bool=False) -> None:
+    def __init__(self, matman, nlat: int, nlng: int, show_normals: bool = False, do_text_coords: bool = True) -> None:
         self._stage = omni.usd.get_context().get_stage()
         self._matman = matman
         self._show_normals = show_normals
@@ -297,27 +297,30 @@ class SphereFlakeFactory():
     yax = Gf.Vec3f(0, 1, 0)
     zax = Gf.Vec3f(0, 0, 1)
 
-    def __init__(self, matman, genmode: str,  nlat: int, nlong: int) -> None:
+    def __init__(self, matman, genmode: str,  nlat: int, nlong: int, radratio: float) -> None:
         self._stage = omni.usd.get_context().get_stage()
         self._matman = matman
         self._genmode = genmode
         self._nlat = nlat
         self._nlng = nlong
+        self._radratio = radratio
         self._smf = SphereMeshFactory(self._matman,  nlat, nlong, show_normals=False)
 
     @staticmethod
-    def CalcQuads(depth: int, nring: int, nlat: int, nlng: int):
+    def CalcQuadsAndPrims(depth: int, nring: int, nlat: int, nlng: int):
         totquads = 0
+        totprims = 0
         for i in range(depth+1):
             nspheres = nring**(i)
             nquads = nspheres * nlat * nlng
             totquads += nquads
-        return totquads
+            totprims += nspheres
+        return totquads, totprims
 
     @staticmethod
-    def CalcTris(depth: int, nring: int, nlat: int, nlng: int):
-        totquads = SphereFlakeFactory.CalcQuads(depth, nring, nlat, nlng)
-        return totquads * 2
+    def CalcTrisAndPrims(depth: int, nring: int, nlat: int, nlng: int):
+        totquads, totprims = SphereFlakeFactory.CalcQuadsAndPrims(depth, nring, nlat, nlng)
+        return totquads * 2, totprims
 
     @staticmethod
     def GetLastGenTime():
@@ -359,21 +362,54 @@ class SphereFlakeFactory():
         # spheremesh = UsdGeom.Mesh.Define(self._stage, meshname)
 
         if self._genmode == "AsyncMesh":
+            meshname = sphflkname + "/SphereMeshAsync"
             asyncio.ensure_future(self._smf.CreateMeshAsync(meshname, matname, cenpt,  rad))
         elif self._genmode == "DirectMesh":
+            meshname = sphflkname + "/SphereMesh"
             self._smf.CreateMesh(meshname, matname, cenpt,  rad)
-        elif self._genmode == "UsdSphere":
-            meshname = sphflkname + "/UsdSphere"
+        elif self._genmode == "OmniSphere":
+            meshname = sphflkname + "/OmniSphere"
             okc.execute('CreateMeshPrimWithDefaultXform',	prim_type="Sphere", prim_path=meshname)
+            sz = rad/50  # 50 is the default radius of the sphere prim
             okc.execute('TransformMultiPrimsSRTCpp',
                         count=1,
                         paths=[meshname],
-                        new_scales=[rad/50, rad/50, rad/50],
+                        new_scales=[sz, sz, sz],
                         new_translations=[cenpt[0], cenpt[1], cenpt[2]])
             mtl = self._matman.GetMaterial(matname)
             prim: Usd.Prim = self._stage.GetPrimAtPath(meshname)
             UsdShade.MaterialBindingAPI(prim).Bind(mtl)
-            
+        elif self._genmode == "UsdSphere":
+            meshname = sphflkname + "/UsdSphere"
+            xformPrim = UsdGeom.Xform.Define(self._stage, meshname)
+            sz = rad
+            UsdGeom.XformCommonAPI(xformPrim).SetTranslate((cenpt[0], cenpt[1], cenpt[2]))
+            UsdGeom.XformCommonAPI(xformPrim).SetScale((sz, sz, sz))
+            spheremesh = UsdGeom.Sphere.Define(self._stage, meshname)
+            mtl = self._matman.GetMaterial(matname)
+            UsdShade.MaterialBindingAPI(spheremesh).Bind(mtl)
+
+        if depth > 0:
+            scheme = "classic"
+            if scheme == "classic":
+                thoff = 0
+                phioff = -20*math.pi/180
+                self._nring = 6
+                self.GenRing(sphflkname, "r1", matname, mxdepth, depth, basept, cenpt, 6, rad, thoff, phioff)
+
+                thoff = 30*math.pi/180
+                phioff = 55*math.pi/180
+                self._nring = 3
+                self.GenRing(sphflkname, "r2", matname, mxdepth, depth, basept, cenpt, 3, rad, thoff, phioff)
+            else:
+                thoff = 0
+                phioff = 0
+                self._nring = 8
+                self.GenRing(sphflkname, "r1", matname, mxdepth, depth, basept, cenpt, self._nring, rad, thoff, phioff)
+
+
+    def GenRing(self, sphflkname: str, ringname: str, matname: str, mxdepth: int, depth: int, basept, cenpt, nring: int, rad: float,
+                thoff: float, phioff: float):
         offvek = cenpt - basept
         len = offvek.GetLength()
         if len > 0:
@@ -389,17 +425,18 @@ class SphereFlakeFactory():
             lxax = self.xax
             lyax = self.yax
             lzax = self.zax
-
-        if depth > 0:
-            nrad = rad / 4
-            for i in range(self._nring):
-                theta = i * 2 * math.pi / self._nring
-                x = rad * math.sin(theta)
-                y = 0
-                z = rad * math.cos(theta)
-                npt = x*lxax + y*lyax + z*lzax
-                subname = f"{sphflkname}/sf_{i}"
-                self.GenRecursively(subname, matname, mxdepth, depth-1, cenpt, cenpt+1.25*npt, nrad)
+        nrad = rad * self._radratio
+        offfak = 1 + self._radratio
+        sphi = math.sin(phioff)
+        cphi = math.cos(phioff)
+        for i in range(nring):
+            theta = thoff + (i*2*math.pi/nring)
+            x = cphi*rad*math.sin(theta)
+            y = sphi*rad
+            z = cphi*rad*math.cos(theta)
+            npt = x*lxax + y*lyax + z*lzax
+            subname = f"{sphflkname}/{ringname}_sf_{i}"
+            self.GenRecursively(subname, matname, mxdepth, depth-1, cenpt, cenpt+offfak*npt, nrad)
 
 
 class MatMan():

@@ -2,11 +2,12 @@ import omni.ext
 import omni.ui as ui
 import omni.kit.commands as okc
 import omni.usd
-import os
+import sys
 import time
 import asyncio
 from pxr import Gf, Sdf, Usd, UsdGeom, UsdShade
 from .ovut import MatMan, SphereMeshFactory, SphereFlakeFactory, delete_if_exists
+import nvidia_smi
 
 # fflake8: noqa
 
@@ -48,7 +49,7 @@ class PrimsExtension(omni.ext.IExt):
         print("ensure_stage")
         if self._stage is None:
             self._stage = omni.usd.get_context().get_stage()
-            print(f"ensure_stage:{self._stage}")
+            print(f"ensure_stage got stage:{self._stage}")
             UsdGeom.SetStageUpAxis(self._stage, UsdGeom.Tokens.y)
             self._total_quads = 0
             self.setup_environment()
@@ -66,6 +67,10 @@ class PrimsExtension(omni.ext.IExt):
         texCoords.Set([(0, 0), (1, 0), (1, 1), (0, 1)])
         return billboard
 
+    def on_stage(self, ext_id):
+        print(f"on_stage - stage:{omni.usd.get_context().get_stage()}")
+        self.ensure_stage()
+
     def on_startup(self, ext_id):
         print("[omni.example.spawn_prims] omni example spawn_prims startup <<<<<<<<<<<<<<<<<")
         print(f"on_startup - stage:{omni.usd.get_context().get_stage()}")
@@ -75,9 +80,10 @@ class PrimsExtension(omni.ext.IExt):
         self._matkeys = self._matman.GetMaterialNames()
         self._window = ui.Window("Spawn Primitives", width=300, height=300)
         self._total_quads = 0
-        self._sf_depth = 3
+        self._sf_depth = 1
         self._sf_nlat = 8
         self._sf_nlng = 8
+        self._sf_radratio = 0.3
         self._sf_depth_but: ui.Button = None
         self._sf_spawn_but: ui.Button = None
         self._sf_nlat_but: ui.Button = None
@@ -88,8 +94,8 @@ class PrimsExtension(omni.ext.IExt):
         self._prims_created = []
         self._nsf_x = 1
         self._nsf_z = 1
-        self._sf_gen_modes = ["DirectMesh", "AsyncMesh", "UsdSphere"]
-        self._sf_gen_mode = "DirectMesh"
+        self._sf_gen_modes = ["DirectMesh", "AsyncMesh", "OmniSphere", "UsdSphere"]
+        self._sf_gen_mode = "UsdSphere"
 
         with self._window.frame:
             with ui.VStack():
@@ -120,8 +126,9 @@ class PrimsExtension(omni.ext.IExt):
                 def on_click_sphereflake():                   
                     self.ensure_stage()
                     genmode = self.get_sf_genmode()
+                    start_time = time.time()
 
-                    sff = SphereFlakeFactory(self._matman, genmode,  nlat=self._sf_nlat, nlong=self._sf_nlng)
+                    sff = SphereFlakeFactory(self._matman, genmode,  self._sf_nlat, self._sf_nlng, self._sf_radratio)
 
                     genmode = self.get_sf_genmode()
 
@@ -135,7 +142,10 @@ class PrimsExtension(omni.ext.IExt):
                     sff.Generate(primpath, matname, depth, depth, cpt, sz)
 
                     self._prims_created.append(primpath)
+                    elap = time.time() - start_time
+                    self._statuslabel.text = f"SpherFlake took elapsed: {elap:.2f} s"
                     UpdateNQuads()
+                    UpdateGpuMemory()
 
                 async def gensflakes():
                     genmode = self.get_sf_genmode()
@@ -168,16 +178,16 @@ class PrimsExtension(omni.ext.IExt):
 
                     nflakes = self._nsf_x * self._nsf_z
 
-                    self._statuslable.text = f"{nflakes} flakes took elapsed: {elap:.2f} s"
+                    self._statuslabel.text = f"{nflakes} flakes took elapsed: {elap:.2f} s"
 
                     UpdateNQuads()
-                    print(f"sphereflake clicked (cwd:{os.getcwd()})")
+                    UpdateGpuMemory()
 
                 def spawnprim(primtype):
                     self.ensure_stage()
                     primpath = f"/World/{primtype}_{self._count}"
                     self._prims_created.append(primpath)
-                    okc.execute('CreateMeshPrimWithDefaultXform',	prim_type=primtype, prim_path=primpath)
+                    okc.execute('CreateMeshPrimWithDefaultXform', prim_type=primtype, prim_path=primpath)
 
                     material = self.get_curmat_mat()
                     self._count += 1
@@ -190,43 +200,48 @@ class PrimsExtension(omni.ext.IExt):
                     prim: Usd.Prim = self._stage.GetPrimAtPath(primpath)
                     UsdShade.MaterialBindingAPI(prim).Bind(material)
 
-                def on_click_sfdepth():
-                    self._sf_depth += 1
+                def on_click_sfdepth(x, y, button, modifier):
+                    self._sf_depth += 1 if button == 1 else -1
                     if self._sf_depth > 5:
                         self._sf_depth = 0
                     self._sf_depth_but.text = f"Depth:{self._sf_depth}"
                     UpdateNQuads()
                     UpdateMQuads()
+                    UpdateGpuMemory()
 
-                def on_click_nlat():
-                    self._sf_nlat += 1
+                def on_click_nlat(x, y, button, modifier):
+                    self._sf_nlat += 1 if button == 1 else -1
                     if self._sf_nlat > 16:
                         self._sf_nlat = 2
                     self._sf_nlat_but.text = f"Nlat:{self._sf_nlat}"
                     UpdateNQuads()
                     UpdateMQuads()
+                    UpdateGpuMemory()
 
-                def on_click_nlng():
-                    self._sf_nlng += 1
+                def on_click_nlng(x, y, button, modifier):
+                    self._sf_nlng += 1 if button == 1 else -1
                     if self._sf_nlng > 16:
                         self._sf_nlng = 3
                     self._sf_nlng_but.text = f"Nlng:{self._sf_nlng}"
                     UpdateNQuads()
                     UpdateMQuads()
+                    UpdateGpuMemory()
 
-                def on_click_sfx():
-                    self._nsf_x += 1
+                def on_click_sfx(x, y, button, modifier):
+                    self._nsf_x += 1 if button == 1 else -1
                     if self._nsf_x > 16:
                         self._nsf_x = 1
                     self._nsf_x_but.text = f"SF - x:{self._nsf_x}"
                     UpdateMQuads()
+                    UpdateGpuMemory()
 
-                def on_click_sfz():
-                    self._nsf_z += 1
+                def on_click_sfz(x, y, button, modifier):
+                    self._nsf_z += 1 if button == 1 else -1
                     if self._nsf_z > 16:
                         self._nsf_z = 1
                     self._nsf_z_but.text = f"SF - z:{self._nsf_z}"
                     UpdateMQuads()
+                    UpdateGpuMemory()
 
                 def on_click_spawnprim():
                     spawnprim(self._curprim)
@@ -245,16 +260,30 @@ class PrimsExtension(omni.ext.IExt):
                     self._sf_primtospawn_but.text = f"{self._curprim}"
 
                 def UpdateNQuads():
-                    ntris = SphereFlakeFactory.CalcTris(self._sf_depth, 8,  self._sf_nlat, self._sf_nlng)
+                    ntris, nprims = SphereFlakeFactory.CalcTrisAndPrims(self._sf_depth, 8, self._sf_nlat, self._sf_nlng)
                     elap = SphereFlakeFactory.GetLastGenTime()
-                    self._sf_spawn_but.text = f"Spawn ShereFlake\n{ntris} tris\nGenElap: {elap:.2f} s"
+                    self._sf_spawn_but.text = f"Spawn ShereFlake\n tris:{ntris:,} prims:{nprims:,}\ngen: {elap:.2f} s"
 
                 def UpdateMQuads():
-                    ntris = SphereFlakeFactory.CalcTris(self._sf_depth, 8,  self._sf_nlat, self._sf_nlng)
+                    ntris, nprims = SphereFlakeFactory.CalcTrisAndPrims(self._sf_depth, 8, self._sf_nlat, self._sf_nlng)
                     tottris = ntris*self._nsf_x*self._nsf_z
-                    self._msf_spawn_but.text = f"Multi ShereFlake\n{tottris} tris"
+                    self._msf_spawn_but.text = f"Multi ShereFlake\ntris:{tottris:,} prims:{nprims:,}"
+
+                def UpdateGpuMemory():
+                    nvidia_smi.nvmlInit()
+
+                    handle = nvidia_smi.nvmlDeviceGetHandleByIndex(0)
+                    # card id 0 hardcoded here, there is also a call to get all available card ids, so we could iterate
+
+                    info = nvidia_smi.nvmlDeviceGetMemoryInfo(handle)
+                    om = float(1024*1024*1024)
+                    msg = f"Mem GB tot:{info.total/om:.2f}: used:{info.used/om:.2f} free:{info.free/om:.2f}"
+                    self._memlabel.text = msg
+
+                print(f"PYTHONPATH:{sys.path}")
 
                 ui.Button("Clear Prims", clicked_fn=lambda: on_click_clearprims())
+                ui.Button()
                 with ui.HStack():
                     self._sf_spawn_but = ui.Button("Spawn Prim", clicked_fn=lambda: on_click_spawnprim())
                     self._sf_primtospawn_but = ui.Button(f"{self._curprim}", clicked_fn=lambda: on_click_changeprim())
@@ -263,17 +292,22 @@ class PrimsExtension(omni.ext.IExt):
                 with ui.VStack():
                     with ui.HStack():
                         self._sf_spawn_but = ui.Button("Spawn ShereFlake", clicked_fn=lambda: on_click_sphereflake())
-                        self._sf_depth_but = ui.Button(f"Depth:{self._sf_depth}", clicked_fn=lambda: on_click_sfdepth())
+                        self._sf_depth_but = ui.Button(f"Depth:{self._sf_depth}",
+                                                       mouse_pressed_fn=lambda x, y, b, m: on_click_sfdepth(x, y, b, m))
                         with ui.VStack():
-                            self._sf_nlat_but = ui.Button(f"Nlat:{self._sf_nlat}", clicked_fn=lambda: on_click_nlat())
-                            self._sf_nlng_but = ui.Button(f"Nlng:{self._sf_nlng}", clicked_fn=lambda: on_click_nlng())
-                            
+                            self._sf_nlat_but = ui.Button(f"Nlat:{self._sf_nlat}",
+                                                          mouse_pressed_fn=lambda x, y, b, m: on_click_nlat(x, y, b, m))
+                            self._sf_nlng_but = ui.Button(f"Nlng:{self._sf_nlng}",
+                                                          mouse_pressed_fn=lambda x, y, b, m: on_click_nlng(x, y, b, m))
+
                     with ui.HStack():
                         self._msf_spawn_but = ui.Button("Multi ShereFlake", clicked_fn=
                                                         lambda: asyncio.ensure_future(on_click_multi_sphereflake()))
                         with ui.VStack():
-                            self._nsf_x_but = ui.Button(f"SF x: {self._nsf_x}", clicked_fn=lambda: on_click_sfx())
-                            self._nsf_z_but = ui.Button(f"SF z: {self._nsf_z}", clicked_fn=lambda: on_click_sfz())
+                            self._nsf_x_but = ui.Button(f"SF x: {self._nsf_x}",
+                                                        mouse_pressed_fn=lambda x, y, b, m: on_click_sfx(x, y, b, m))
+                            self._nsf_z_but = ui.Button(f"SF z: {self._nsf_z}",
+                                                        mouse_pressed_fn=lambda x, y, b, m: on_click_sfz(x, y, b, m))
                 UpdateNQuads()
                 UpdateMQuads()
 
@@ -289,7 +323,8 @@ class PrimsExtension(omni.ext.IExt):
                     idx = 0
                 self._genmodebox = ui.ComboBox(idx, *self._sf_gen_modes).model
 
-                self._statuslable = ui.Label("Status: Ready")
+                self._statuslabel = ui.Label("Status: Ready")
+                self._memlabel = ui.Button("Memory tot/used/free", clicked_fn=UpdateGpuMemory)
 
     def get_curmat_mat(self):
         idx = self._matbox.get_item_value_model().as_int
@@ -302,12 +337,12 @@ class PrimsExtension(omni.ext.IExt):
         self._current_material_name = self._matkeys[idx]
         rv = self._current_material_name
         return rv
-    
+
     def get_sf_genmode(self):
         idx = self._genmodebox.get_item_value_model().as_int
         self._sf_genmode = self._sf_gen_modes[idx]
         rv = self._sf_genmode
-        return rv    
+        return rv
 
     def on_shutdown(self):
         print("[omni.example.spawn_prims] omni example spawn_prims shutdown")

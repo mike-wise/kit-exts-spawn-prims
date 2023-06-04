@@ -45,3 +45,7 @@ name = "omni.example.spawn_prims"
 dependencies = [
     "omni.kit.ui_test" # UI testing extension
 ]
+
+[python.pipapi]
+requirements = ["nvidia-smi","nvidia-ml-py3"]
+use_online_index = true
