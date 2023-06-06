@@ -1,5 +1,6 @@
 import omni.ext
 import omni.ui as ui
+from omni.ui import color as clr
 import omni.kit.commands as okc
 import omni.usd
 import sys
@@ -129,6 +130,9 @@ class PrimsExtension(omni.ext.IExt):
                     self.ensure_stage()
                     genmode = self.get_sf_genmode()
                     genform = self.get_sf_genform()
+
+                    self._sf_radratio = self._sf_radratio_slider.get_value_as_float()
+
                     start_time = time.time()
 
                     sff = SphereFlakeFactory(self._matman, genmode, genform,  self._sf_nlat, self._sf_nlng, self._sf_radratio)
@@ -151,6 +155,8 @@ class PrimsExtension(omni.ext.IExt):
                 async def gensflakes():
                     genmode = self.get_sf_genmode()
                     genform = self.get_sf_genform()
+                    self._sf_radratio = self._sf_radratio_slider.get_value_as_float()
+
                     sff = SphereFlakeFactory(self._matman, genmode, genform,  self._sf_nlat, self._sf_nlng, self._sf_radratio)
                     await asyncio.sleep(1)
 
@@ -168,6 +174,9 @@ class PrimsExtension(omni.ext.IExt):
                             cpt = Gf.Vec3f((ix-ixoff)*sz*3, sz, (iz-izoff)*sz*3)
                             sff.Generate(primpath, matname, depth, depth, cpt, sz)
                             self._prims_created.append(primpath)
+                            extent = sff.GetFlakeExtent(depth, sz, self._sf_radratio)
+                            spawncube_with_mat(primpath+"/bounds", cpt, sz, "Red_Glass")
+
                             # await asyncio.sleep(1)
 
                 async def on_click_multi_sphereflake():
@@ -184,6 +193,15 @@ class PrimsExtension(omni.ext.IExt):
 
                     UpdateNQuads()
                     UpdateGpuMemory()
+
+                def spawncube_with_mat(primpath, cenpt, rad, matname):
+                    xformPrim = UsdGeom.Xform.Define(self._stage, primpath)
+                    sz = rad
+                    UsdGeom.XformCommonAPI(xformPrim).SetTranslate((cenpt[0], cenpt[1], cenpt[2]))
+                    UsdGeom.XformCommonAPI(xformPrim).SetScale((sz, sz, sz))
+                    spheremesh = UsdGeom.Cube.Define(self._stage, primpath)
+                    mtl = self._matman.GetMaterial(matname)
+                    UsdShade.MaterialBindingAPI(spheremesh).Bind(mtl)
 
                 def spawnprim(primtype):
                     self.ensure_stage()
@@ -305,37 +323,66 @@ class PrimsExtension(omni.ext.IExt):
                 if idx < 0:
                     idx = 0
                 self._genformbox = ui.ComboBox(idx, *self._sf_gen_forms).model                    
+                darkgreen = clr("#004000")
+                darkblue = clr("#000040")
+                darkred = clr("#400000")
+                darkyellow = clr("#404000")
+                darkpurple = clr("#400040")
 
-                ui.Button("Clear Prims", clicked_fn=lambda: on_click_clearprims())
+                ui.Button("Clear Prims", 
+                          style={'background_color': darkyellow},
+                          clicked_fn=lambda: on_click_clearprims())
                 ui.Button()
                 with ui.HStack():
-                    self._sf_spawn_but = ui.Button("Spawn Prim", clicked_fn=lambda: on_click_spawnprim())
-                    self._sf_primtospawn_but = ui.Button(f"{self._curprim}", clicked_fn=lambda: on_click_changeprim())
-                ui.Button("Spawn Billboard", clicked_fn=lambda: on_click_billboard())
-                ui.Button("Spawn ShereMesh", clicked_fn=lambda: on_click_spheremesh())
+                    self._sf_spawn_but = ui.Button("Spawn Prim",
+                                                   style={'background_color': darkred},
+                                                   clicked_fn=lambda: on_click_spawnprim())
+                    self._sf_primtospawn_but = ui.Button(f"{self._curprim}",
+                                                         style={'background_color': darkpurple},
+                                                         clicked_fn=lambda: on_click_changeprim())
+                ui.Button("Spawn Billboard",
+                          style={'background_color': darkred},
+                          clicked_fn=lambda: on_click_billboard())
+                ui.Button("Spawn ShereMesh",
+                          style={'background_color': darkred},
+                          clicked_fn=lambda: on_click_spheremesh())
                 with ui.VStack():
                     with ui.HStack():
-                        self._sf_spawn_but = ui.Button("Spawn ShereFlake", clicked_fn=lambda: on_click_sphereflake())
+                        self._sf_spawn_but = ui.Button("Spawn ShereFlake",
+                                                       style={'background_color': darkred},
+                                                       clicked_fn=lambda: on_click_sphereflake())
                         self._sf_depth_but = ui.Button(f"Depth:{self._sf_depth}",
+                                                       style={'background_color': darkgreen},
                                                        mouse_pressed_fn=lambda x, y, b, m: on_click_sfdepth(x, y, b, m))
                         with ui.VStack():
                             self._sf_nlat_but = ui.Button(f"Nlat:{self._sf_nlat}",
+                                                          style={'background_color': darkgreen},
                                                           mouse_pressed_fn=lambda x, y, b, m: on_click_nlat(x, y, b, m))
                             self._sf_nlng_but = ui.Button(f"Nlng:{self._sf_nlng}",
+                                                          style={'background_color': darkgreen},
                                                           mouse_pressed_fn=lambda x, y, b, m: on_click_nlng(x, y, b, m))
 
                     with ui.HStack():
-                        self._msf_spawn_but = ui.Button("Multi ShereFlake", clicked_fn=
+                        self._msf_spawn_but = ui.Button("Multi ShereFlake",
+                                                        style={'background_color': darkred},
+                                                        clicked_fn=
                                                         lambda: asyncio.ensure_future(on_click_multi_sphereflake()))
                         with ui.VStack():
                             self._nsf_x_but = ui.Button(f"SF x: {self._nsf_x}",
+                                                        style={'background_color': darkblue},
                                                         mouse_pressed_fn=lambda x, y, b, m: on_click_sfx(x, y, b, m))
                             self._nsf_z_but = ui.Button(f"SF z: {self._nsf_z}",
+                                                        style={'background_color': darkblue},
                                                         mouse_pressed_fn=lambda x, y, b, m: on_click_sfz(x, y, b, m))
+                            with ui.HStack():
+                                ui.Label("Radius Ratio: ",
+                                         style={'background_color': darkblue},
+                                         width=50)
+                                self._sf_radratio_slider = ui.FloatSlider(min=0.0, max=1.0, step=0.01,
+                                                                          style={'background_color': darkblue}).model
+                                self._sf_radratio_slider.set_value(self._sf_radratio)
                 UpdateNQuads()
                 UpdateMQuads()
-
- 
 
                 self._statuslabel = ui.Label("Status: Ready")
                 self._memlabel = ui.Button("Memory tot/used/free", clicked_fn=UpdateGpuMemory)

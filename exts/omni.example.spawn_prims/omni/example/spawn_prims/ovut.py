@@ -324,9 +324,16 @@ class SphereFlakeFactory():
         return totquads * 2, totprims
 
     @staticmethod
+    def GetFlakeExtent(depth: int, rad: float, radratio: float):
+        sz = rad * radratio**depth
+        return Gf.Vec3f(sz, sz, sz)
+
+    @staticmethod
     def GetLastGenTime():
         global latest_sf_gen_time
         return latest_sf_gen_time
+    
+
 
     def Generate(self, sphflkname: str, matname: str, mxdepth: int, depth: int, cenpt: Gf.Vec3f, rad: float):
 
