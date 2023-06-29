@@ -3,11 +3,11 @@
 version = "1.0.0"
 
 # Lists people or organizations that are considered the "authors" of the package.
-authors = ["NVIDIA"]
+authors = ["mike-wise"]
 
 # The title and description fields are primarily for displaying extension info in UI
-title = "Spawn Primitives"
-description="Spawn different primitives in the scene utilizing omni kit's commands"
+title = "SphereFlake Benchmark"
+description="Spawn SphereFlakes in the scene using different techniques for benchmarking purposes"
 
 # Path (relative to the root) or content of readme markdown file for UI.
 readme  = "docs/README.md"
@@ -39,6 +39,7 @@ icon = "data/icon.png"
 # Main python module this extension provides, it will be publicly available as "import omni.example.spawn_prims".
 [[python.module]]
 name = "omni.example.spawn_prims"
+# name = "omni.sphereflake_benchmark"
 
 [[test]]
 # Extra dependencies only to be used during test run
