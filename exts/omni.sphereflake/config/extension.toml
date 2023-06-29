@@ -16,10 +16,10 @@ readme  = "docs/README.md"
 repository = ""
 
 # One of categories for UI.
-category = "Example"
+category = "Benchmark"
 
 # Keywords for the extension
-keywords = ["kit", "example"]
+keywords = ["kit", "sphereflake", "benchmark"]
 
 # Location of change log file in target (final) folder of extension, relative to the root.
 # More info on writing changelog: https://keepachangelog.com/en/1.0.0/
@@ -38,8 +38,8 @@ icon = "data/icon.png"
 
 # Main python module this extension provides, it will be publicly available as "import omni.example.spawn_prims".
 [[python.module]]
-name = "omni.example.spawn_prims"
-# name = "omni.sphereflake_benchmark"
+# name = "omni.example.spawn_prims"
+name = "omni.sphereflake"
 
 [[test]]
 # Extra dependencies only to be used during test run
