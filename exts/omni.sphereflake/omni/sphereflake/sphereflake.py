@@ -1,6 +1,7 @@
 import omni.ext
 import omni.kit.commands as okc
 import omni.usd
+import carb
 import time
 import asyncio
 import math
@@ -14,20 +15,33 @@ latest_sf_gen_time = 0
 
 class SphereFlakeFactory():
 
+    _matman = None
+    _genmode = "tris"
+    _genform = "sphere"
+    _nlat = 8
+    _nlng = 8
+    _rad = 50
+    _radratio = 0.3
+    _start_time = 0
+    
+
     org = Gf.Vec3f(0, 0, 0)
     xax = Gf.Vec3f(1, 0, 0)
     yax = Gf.Vec3f(0, 1, 0)
     zax = Gf.Vec3f(0, 0, 1)
 
-    def __init__(self, matman, genmode: str, genform: str,  nlat: int, nlong: int, radratio: float) -> None:
+    def __init__(self) -> None:
         self._stage = omni.usd.get_context().get_stage()
-        self._matman = matman
-        self._genmode = genmode
-        self._genform = genform
-        self._nlat = nlat
-        self._nlng = nlong
-        self._radratio = radratio
-        self._smf = SphereMeshFactory(self._matman,  nlat, nlong, show_normals=False)
+        self._count = 0
+
+    def GenPrep(self):
+        self._smf = SphereMeshFactory(self._matman,  self._nlat, self._nlng, show_normals=False)
+
+    def Set(self, attname: str, val: float):
+        if hasattr(self, attname):
+            self.__dict__[attname] = val
+        else:
+            carb.log.error(f"SphereFlakeFactory.Set: no attribute {attname}")
 
     @staticmethod
     def CalcQuadsAndPrims(depth: int, nring: int, nlat: int, nlng: int):
@@ -81,15 +95,20 @@ class SphereFlakeFactory():
         return cube
 
     @staticmethod
-    def GenerateSnowFlakes(genmode: str, genform: str, radratio: float, sz: float, depth: int, nx: int, nz: int,
-                           nlat: int, nlng: int, matman: ovut.MatMan, matname: str, bbmatname: str,
-                           initcount: int, bounds_visible: bool):
-        sff = SphereFlakeFactory(matman, genmode, genform,  nlat, nlng, radratio)
+    def GenerateManySnowFlakes(genmode: str, genform: str, nlat: int, nlng: int,
+                               rad: float, radratio: float, depth: int,
+                               nx: int, nz: int,
+                               matman: ovut.MatMan, matname: str, bbmatname: str,
+                               initcount: int, bounds_visible: bool):
+        sff = SphereFlakeFactory(matman, genmode, genform,  nlat, nlng, rad, radratio)
 
-        cpt = Gf.Vec3f(0, sz, 0)
-        depth = depth
-        extentvec = sff.GetFlakeExtent(depth, sz, radratio)
-        count = initcount
+        rv = sff.GenerateMany(depth, nx, nz, matname, bbmatname, initcount, bounds_visible)
+        return rv
+
+    def GenerateMany(self, depth, nx, nz, matname, bbmatname, bounds_visible):
+        cpt = Gf.Vec3f(0, self._rad, 0)
+        extentvec = self.GetFlakeExtent(depth, self._rad, self._radratio)
+        count = self._count
         createlist = []
         bbcubelist = []
         for ix in range(nx):
@@ -97,18 +116,18 @@ class SphereFlakeFactory():
                 count += 1
                 primpath = f"/World/SphereFlake_{count}"
 
-                cpt = sff.GetCenterPosition(ix, nx, iz, nz, extentvec)
+                cpt = self.GetCenterPosition(ix, nx, iz, nz, extentvec)
 
-                sff.Generate(primpath, matname, depth, depth, cpt, sz)
+                self.Generate(primpath, matname, depth, cpt)
                 createlist.append(primpath)
                 bnd_cubepath = primpath+"/bounds"
 
-                bnd_cube = SphereFlakeFactory.SpawnCubeWithMat(bnd_cubepath, cpt, extentvec, matman, bbmatname)
+                bnd_cube = SphereFlakeFactory.SpawnCubeWithMat(bnd_cubepath, cpt, extentvec, self._matman, bbmatname)
                 bbcubelist.append(bnd_cubepath)
                 UsdGeom.Imageable(bnd_cube).MakeVisible(bounds_visible)
         return (count, createlist, bbcubelist)
 
-    def Generate(self, sphflkname: str, matname: str, mxdepth: int, depth: int, cenpt: Gf.Vec3f, rad: float):
+    def Generate(self, sphflkname: str, matname: str, depth: int, cenpt: Gf.Vec3f):
 
         global latest_sf_gen_time
 
@@ -123,8 +142,9 @@ class SphereFlakeFactory():
         UsdGeom.XformCommonAPI(xformPrim).SetTranslate((0, 0, 0))
         UsdGeom.XformCommonAPI(xformPrim).SetRotate((0, 0, 0))
 
+        mxdepth = depth
         basept = cenpt
-        self.GenRecursively(sphflkname, matname, mxdepth, depth, basept, cenpt, rad)
+        self.GenRecursively(sphflkname, matname, mxdepth, depth, basept, cenpt, self._rad)
 
         elap = time.time() - self._start_time
         print(f"GenerateSF {sphflkname} {matname} {depth} {cenpt} totquads:{self._total_quads} in {elap:.3f} secs")
