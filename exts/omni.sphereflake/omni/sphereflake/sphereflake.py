@@ -18,12 +18,14 @@ class SphereFlakeFactory():
     _matman = None
     _genmode = "tris"
     _genform = "sphere"
+    _depth = 1
     _nlat = 8
     _nlng = 8
     _rad = 50
     _radratio = 0.3
-    _start_time = 0
-    
+    _start_timee = 0
+    _createlist = []
+    _bbcubelist = []
 
     org = Gf.Vec3f(0, 0, 0)
     xax = Gf.Vec3f(1, 0, 0)
@@ -35,7 +37,15 @@ class SphereFlakeFactory():
         self._count = 0
 
     def GenPrep(self):
-        self._smf = SphereMeshFactory(self._matman,  self._nlat, self._nlng, show_normals=False)
+        self._smf = SphereMeshFactory()
+        self._smf._nlat = self._nlat
+        self._smf._nlng = self._nlng
+        self._smf._matman = self._matman
+        self._smf.GenPrep()
+
+    def Clear(self):
+        self._createlist = []
+        self._bbcubelist = []
 
     def Set(self, attname: str, val: float):
         if hasattr(self, attname):
@@ -109,8 +119,8 @@ class SphereFlakeFactory():
         cpt = Gf.Vec3f(0, self._rad, 0)
         extentvec = self.GetFlakeExtent(depth, self._rad, self._radratio)
         count = self._count
-        createlist = []
-        bbcubelist = []
+        self._createlist = []
+        self._bbcubelist = []
         for ix in range(nx):
             for iz in range(nz):
                 count += 1
@@ -119,19 +129,25 @@ class SphereFlakeFactory():
                 cpt = self.GetCenterPosition(ix, nx, iz, nz, extentvec)
 
                 self.Generate(primpath, matname, depth, cpt)
-                createlist.append(primpath)
+                self._createlist.append(primpath)
                 bnd_cubepath = primpath+"/bounds"
 
                 bnd_cube = SphereFlakeFactory.SpawnCubeWithMat(bnd_cubepath, cpt, extentvec, self._matman, bbmatname)
-                bbcubelist.append(bnd_cubepath)
+                self._bbcubelist.append(bnd_cubepath)
                 UsdGeom.Imageable(bnd_cube).MakeVisible(bounds_visible)
-        return (count, createlist, bbcubelist)
+        return (count)
+
+    def SetBoundsVisibility(self, visible: bool):
+        for primpath in self._bbcubelist:
+            prim = self._stage.GetPrimAtPath(primpath)
+            print(f"primpath={primpath} prim={prim} visible={visible}")
+            okc.execute('ToggleVisibilitySelectedPrims', selected_paths=[primpath])
 
     def Generate(self, sphflkname: str, matname: str, depth: int, cenpt: Gf.Vec3f):
 
         global latest_sf_gen_time
 
-        self._start_time = time.time()
+        self._start_timee = time.time()
         self._total_quads = 0
 
         self._depth = depth
@@ -146,7 +162,7 @@ class SphereFlakeFactory():
         basept = cenpt
         self.GenRecursively(sphflkname, matname, mxdepth, depth, basept, cenpt, self._rad)
 
-        elap = time.time() - self._start_time
+        elap = time.time() - self._start_timee
         print(f"GenerateSF {sphflkname} {matname} {depth} {cenpt} totquads:{self._total_quads} in {elap:.3f} secs")
 
         latest_sf_gen_time = elap
@@ -208,7 +224,7 @@ class SphereFlakeFactory():
                 self._nring = 8
                 self.GenRing(sphflkname, "r1", matname, mxdepth, depth, basept, cenpt, self._nring, rad, thoff, phioff)
 
-    def GenRing(self, sphflkname: str, ringname: str, matname: str, mxdepth: int, depth: int, 
+    def GenRing(self, sphflkname: str, ringname: str, matname: str, mxdepth: int, depth: int,
                 basept: Gf.Vec3f, cenpt: Gf.Vec3f,
                 nring: int, rad: float,
                 thoff: float, phioff: float):

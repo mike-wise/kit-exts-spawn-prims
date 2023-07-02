@@ -4,19 +4,22 @@ import omni.usd
 import math
 import numpy as np
 from pxr import Gf, Sdf, Usd, UsdGeom, UsdShade, Vt
+from .ovut import MatMan, delete_if_exists
 
 
 class SphereMeshFactoryV1():
 
     _show_normals = False
+    _matman = None
+    _nlat = 8
+    _nlong = 8
+    _total_quads = 0
 
-    def __init__(self, matman, nlat: int, nlng: int, show_normals=False) -> None:
+    def __init__(self) -> None:
         self._stage = omni.usd.get_context().get_stage()
-        self._matman = matman
-        self._show_normals = show_normals
-        self._total_quads = 0
-        self._nlat = nlat
-        self._nlong = nlng
+        pass
+
+    def GenPrep(self):
         pass
 
     def MakeMarker(self, name: str, matname: str, cenpt: Gf.Vec3f, rad: float):
@@ -113,22 +116,27 @@ class SphereMeshFactoryV1():
 class SphereMeshFactory():
 
     _show_normals = False
+    _depth = 1
+    _matman = None
+    _nlat = 8
+    _nlong = 8
+    _total_quads = 0
+    _dotexcoords = True
 
-    def __init__(self, matman, nlat: int, nlng: int, show_normals: bool = False, do_text_coords: bool = True) -> None:
+    def __init__(self) -> None:
         self._stage = omni.usd.get_context().get_stage()
-        self._matman = matman
-        self._show_normals = show_normals
-        self._dotexcoords = do_text_coords
-        self._total_quads = 0
-        self._nlat = nlat
-        self._nlong = nlng
-        self._nquads = nlat*nlng
-        self._nverts = (nlat+1)*(nlng)
+
+    def GenPrep(self):
+        self._nquads = self._nlat*self._nlong
+        self._nverts = (self._nlat+1)*(self._nlong)
         self._normbuf = np.zeros((self._nverts, 3), dtype=np.float32)
         self._txtrbuf = np.zeros((self._nverts, 2), dtype=np.float32)
         self._facebuf = np.zeros((self._nquads, 1), dtype=np.int32)
         self._vidxbuf = np.zeros((self._nquads, 4), dtype=np.int32)
         self.MakeArrays()
+
+    def Clear(self):
+        pass
 
     def MakeMarker(self, name: str, matname: str, cenpt: Gf.Vec3f, rad: float):
         print(f"MakeMarker {name}  {cenpt} {rad}")

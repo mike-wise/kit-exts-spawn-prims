@@ -3,11 +3,10 @@ import omni.ui as ui
 from omni.ui import color as clr
 import omni.kit.commands as okc
 import omni.usd
-import sys
 import time
 import asyncio
 from pxr import Gf, Sdf, Usd, UsdGeom, UsdShade
-from .ovut import MatMan, delete_if_exists
+from .ovut import MatMan, delete_if_exists, write_out_syspath
 from .spheremesh import SphereMeshFactory
 from .sphereflake import SphereFlakeFactory
 import nvidia_smi
@@ -28,8 +27,8 @@ class PrimsExtension(omni.ext.IExt):
     _floor_zdim = 5
     _bounds_visible = False
     _sf_size = 50
-    _sf_depth = 1
     _sf_radratio = 0.3
+    _vsc_test8 = False
 
     def setup_environment(self, force: bool = False):
         ppathstr = "/World/Floor"
@@ -41,7 +40,7 @@ class PrimsExtension(omni.ext.IExt):
         prim: Usd.Prim = self._stage .GetPrimAtPath(prim_path_sdf)
         if not prim.IsValid():
             okc.execute('CreateMeshPrimWithDefaultXform',	prim_type="Plane", prim_path=ppathstr)
-            extent3f = SphereFlakeFactory.GetFlakeExtent(self._sf_depth, self._sf_size, self._sf_radratio)
+            extent3f = SphereFlakeFactory.GetFlakeExtent(self.smf._depth, self._sf_size, self._sf_radratio)
 
             # self._floor_xdim = 4 + self._nsf_x
             # self._floor_zdim = 4 + self._nsf_z
@@ -55,6 +54,11 @@ class PrimsExtension(omni.ext.IExt):
             okc.execute('CreateDynamicSkyCommand',
                         sky_url=f'{baseurl}/Assets/Skies/2022_1/Skies/Dynamic/CumulusLight.usd',
                         sky_path='/Environment/sky')
+
+            print(f"nvidia_smi.__file__:{nvidia_smi.__file__}")
+            print(f"omni.ui.__file__:{omni.ui.__file__}")
+            print(f"omni.ext.__file__:{omni.ext.__file__}")
+            # print(f"PYTHONPATH:{sys.path}")
 
     def ensure_stage(self):
         print("ensure_stage")
@@ -92,7 +96,6 @@ class PrimsExtension(omni.ext.IExt):
         self._matkeys = self._matman.GetMaterialNames()
         self._window = ui.Window("Spawn Primitives", width=300, height=300)
         self._total_quads = 0
-        self._sf_depth = 1
         self._sf_size = 50
         self._sf_nlat = 8
         self._sf_nlng = 8
@@ -105,15 +108,16 @@ class PrimsExtension(omni.ext.IExt):
         self._curprim = "Sphere"
         self._prims = ["Sphere", "Cube", "Cone", "Torus", "Cylinder", "Plane", "Disk", "Capsule",
                        "Billboard", "SphereMesh"]
-        self._prims_created = []
-        self._bounds_created = []
         self._nsf_x = 1
         self._nsf_z = 1
         self._sf_gen_modes = ["DirectMesh", "AsyncMesh", "OmniSphere", "UsdSphere"]
         self._sf_gen_mode = "UsdSphere"
         self._sf_gen_forms = ["Classic", "Flat-8"]
         self._sf_gen_form = "Classic"
+        self._sf_test2 = False
+        self._write_out_syspath = False
 
+        self.smf = SphereMeshFactory()
         self.sff = SphereFlakeFactory()
 
         with self._window.frame:
@@ -122,21 +126,13 @@ class PrimsExtension(omni.ext.IExt):
                 def toggle_bounds():
                     self.ensure_stage()
                     self._bounds_visible = not self._bounds_visible
-                    # print(f"toggle_bounds - self._bounds_created:{self._bounds_created}")
-                    # okc.execute('ToggleVisibilitySelectedPrims', selected_paths=self._bounds_created)
-                    for primpath in self._bounds_created:
-                        # print(primpath)
-                        okc.execute('ToggleVisibilitySelectedPrims', selected_paths=[primpath])
-
-                    #     prim: Usd.Prim = self._stage.GetPrimAtPath(primpath)
-                    #     if prim.IsValid():
+                    self.sff.SetBoundsVisibility(self._bounds_visible)
 
                 def on_click_billboard():
                     self.ensure_stage()
 
-                    primpath = f"/World/Billboard_{self._count}"
+                    primpath = f"/World/Prim_Billboard_{self._count}"
                     billboard = self.create_billboard(primpath)
-                    self._prims_created.append(primpath)
 
                     material = self.get_curmat_mat()
                     UsdShade.MaterialBindingAPI(billboard).Bind(material)
@@ -144,14 +140,16 @@ class PrimsExtension(omni.ext.IExt):
                 def on_click_spheremesh():
                     self.ensure_stage()
 
-                    sm = SphereMeshFactory(self._matman, self._sf_nlat, self._sf_nlng)
+                    self.smf._matman = self._matman
+                    self.smf._nlat = self._sf_nlat
+                    self.smf._nlng = self._sf_nlng
+                    self.smf.GenPrep()
 
                     matname = self.get_curmat_name()
                     cpt = Gf.Vec3f(0, self._sf_size, 0)
                     primpath = f"/World/SphereMesh_{self._count}"
                     self._count += 1
-                    sm.CreateMesh(primpath, matname, cpt, self._sf_size)
-                    self._prims_created.append(primpath)
+                    self.smf.CreateMesh(primpath, matname, cpt, self._sf_size)
 
                 def on_click_sphereflake():
                     self.ensure_stage()
@@ -172,11 +170,10 @@ class PrimsExtension(omni.ext.IExt):
                     primpath = f"/World/SphereFlake_{self._count}"
 
                     self._count += 1
-                    depth = self._sf_depth
+                    depth = self.smf._depth
                     sfmname = self.get_curmat_name()
                     sff.Generate(primpath, sfmname, depth, cpt)
 
-                    self._prims_created.append(primpath)
                     elap = time.time() - start_time
                     self._statuslabel.text = f"SphereFlake took elapsed: {elap:.2f} s"
                     UpdateNQuads()
@@ -194,16 +191,13 @@ class PrimsExtension(omni.ext.IExt):
                     sff._radratio = self._sf_radratio
                     sff.GenPrep()
 
-                    depth = self._sf_depth
+                    depth = self.smf._depth
                     sfmname = self.get_curmat_name()
                     bbmname = self.get_curmat_bbox_name()
-                    rv = sff.GenerateMany(depth, self._nsf_x, self._nsf_z,
-                                          sfmname, bbmname, self._bounds_visible)
+                    new_count = sff.GenerateMany(depth, self._nsf_x, self._nsf_z,
+                                                 sfmname, bbmname, self._bounds_visible)
 
-                    (cnt, sflist, bblist) = rv
-                    self._count += cnt
-                    self._prims_created.extend(sflist)
-                    self._bounds_created.extend(bblist)
+                    self._count += new_count
 
                 async def on_click_multi_sphereflake():
                     self.ensure_stage()
@@ -228,8 +222,7 @@ class PrimsExtension(omni.ext.IExt):
                     elif primtype == "SphereMesh":
                         on_click_spheremesh()
                         return
-                    primpath = f"/World/{primtype}_{self._count}"
-                    self._prims_created.append(primpath)
+                    primpath = f"/World/Prim_{primtype}_{self._count}"
                     okc.execute('CreateMeshPrimWithDefaultXform', prim_type=primtype, prim_path=primpath)
 
                     material = self.get_curmat_mat()
@@ -244,10 +237,13 @@ class PrimsExtension(omni.ext.IExt):
                     UsdShade.MaterialBindingAPI(prim).Bind(material)
 
                 def on_click_sfdepth(x, y, button, modifier):
-                    self._sf_depth += 1 if button == 1 else -1
-                    if self._sf_depth > 5:
-                        self._sf_depth = 0
-                    self._sf_depth_but.text = f"Depth:{self._sf_depth}"
+                    depth = self.smf._depth
+                    depth += 1 if button == 1 else -1
+                    if depth > 5:
+                        depth = 0
+                    self._sf_depth_but.text = f"Depth:{depth}"
+                    self.smf._depth = depth
+                    self.sff._depth = depth
                     UpdateNQuads()
                     UpdateMQuads()
                     UpdateGpuMemory()
@@ -291,20 +287,19 @@ class PrimsExtension(omni.ext.IExt):
 
                 def on_click_clearprims():
                     self.ensure_stage()
-                    for primpath in self._prims_created:
-                        delete_if_exists(primpath)
-                    self._prims_created = []
-                    self._bounds_created = []
-
                     # check and see what we have missed
                     worldprim = self._stage.GetPrimAtPath("/World")
                     for child_prim in worldprim.GetAllChildren():
                         cname = child_prim.GetName()
-                        dodelete = cname.startswith("SphereFlake_") or cname.startswith("SphereMesh_")
+                        prefix = cname.split("_")[0]
+                        dodelete = prefix in ["SphereFlake", "SphereMesh", "Prim"]
                         if dodelete:
                             print(f"deleting {cname}")
                             cpath = child_prim.GetPrimPath()
                             okc.execute("DeletePrimsCommand", paths=[cpath])
+                    self.smf.Clear()
+                    self.sff.Clear()
+                    self._count = 0
 
                 def on_click_changeprim():
                     idx = self._prims.index(self._curprim)
@@ -317,7 +312,7 @@ class PrimsExtension(omni.ext.IExt):
                 def UpdateNQuads():
                     genform = self.get_sf_genform()
                     nring = 9 if genform == "Classic" else 8
-                    depth = self._sf_depth
+                    depth = self.smf._depth
                     ntris, nprims = SphereFlakeFactory.CalcTrisAndPrims(depth, nring, self._sf_nlat, self._sf_nlng)
                     elap = SphereFlakeFactory.GetLastGenTime()
                     self._sf_spawn_but.text = f"Spawn ShereFlake\n tris:{ntris:,} prims:{nprims:,}\ngen: {elap:.2f} s"
@@ -325,7 +320,7 @@ class PrimsExtension(omni.ext.IExt):
                 def UpdateMQuads():
                     genform = self.get_sf_genform()
                     nring = 9 if genform == "Classic" else 8
-                    depth = self._sf_depth
+                    depth = self.smf._depth
                     ntris, nprims = SphereFlakeFactory.CalcTrisAndPrims(depth, nring, self._sf_nlat, self._sf_nlng)
                     tottris = ntris*self._nsf_x*self._nsf_z
                     self._msf_spawn_but.text = f"Multi ShereFlake\ntris:{tottris:,} prims:{nprims:,}"
@@ -341,7 +336,8 @@ class PrimsExtension(omni.ext.IExt):
                     msg = f"Mem GB tot:{info.total/om:.2f}: used:{info.used/om:.2f} free:{info.free/om:.2f}"
                     self._memlabel.text = msg
 
-                # print(f"PYTHONPATH:{sys.path}")
+                if self._write_out_syspath:
+                    write_out_syspath()
 
                 # Material Combo Box
                 idx = self._matkeys.index(self._current_material_name)
@@ -393,7 +389,7 @@ class PrimsExtension(omni.ext.IExt):
                         self._sf_spawn_but = ui.Button("Spawn SphereFlake",
                                                        style={'background_color': darkred},
                                                        clicked_fn=lambda: on_click_sphereflake())
-                        self._sf_depth_but = ui.Button(f"Depth:{self._sf_depth}",
+                        self._sf_depth_but = ui.Button(f"Depth:{self.smf._depth}",
                                                        style={'background_color': darkgreen},
                                                        mouse_pressed_fn=lambda x, y, b, m: on_click_sfdepth(x, y, b, m))
                         with ui.VStack():

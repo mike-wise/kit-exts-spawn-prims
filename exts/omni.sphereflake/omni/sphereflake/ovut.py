@@ -2,6 +2,7 @@ import omni.ext
 import omni.kit.commands as okc
 import omni.usd
 import os
+import sys
 
 from pxr import Gf, Sdf, UsdShade
 from typing import Tuple, List
@@ -19,6 +20,19 @@ def cross_product(v1: Gf.Vec3f, v2: Gf.Vec3f) -> Gf.Vec3f:
     z = v1[0] * v2[1] - v1[1] * v2[0]
     rv = Gf.Vec3f(x, y, z)
     return rv
+
+
+def write_out_syspath(fname: str = 'd:/nv/ov/pythonpath.txt') -> None:
+    # Write out the python path to a file for the settings.json python.analsys.extraPaths setting
+    pplist = sys.path
+    with open(fname, 'w') as f:
+        for line in pplist:
+            nline = line.replace("\\", "/")
+            nnline = f"        \"{nline}\",\n"
+            f.write(nnline)
+
+    # This causes the system to hang probably because it is flooding the carb log
+    #  print(f"sys.path:{sys.path}")
 
 
 class MatMan():
@@ -46,7 +60,7 @@ class MatMan():
         diffuseTextureSampler = UsdShade.Shader.Define(stage, f'{matpath}/diffuseTexture')
         diffuseTextureSampler.CreateIdAttr('UsdUVTexture')
         ASSETS_DIRECTORY = os.path.dirname(os.path.realpath(__file__))
-        # print(f"ASSETS_DIRECTORY {ASSETS_DIRECTORY}")                    
+        # print(f"ASSETS_DIRECTORY {ASSETS_DIRECTORY}")
         texfile = f"{ASSETS_DIRECTORY}\\{fname}"
         # print(texfile)
         # print(os.path.exists(texfile))
