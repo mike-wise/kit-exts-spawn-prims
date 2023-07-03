@@ -8,14 +8,14 @@ import math
 from pxr import Gf, Usd, UsdGeom, UsdShade
 from .spheremesh import SphereMeshFactory
 from . import ovut
-
+from .ovut import MatMan
 
 latest_sf_gen_time = 0
 
 
 class SphereFlakeFactory():
 
-    _matman = None
+    _matman: MatMan = None
     _genmode = "tris"
     _genform = "sphere"
     _depth = 1
@@ -32,16 +32,18 @@ class SphereFlakeFactory():
     yax = Gf.Vec3f(0, 1, 0)
     zax = Gf.Vec3f(0, 0, 1)
 
-    def __init__(self) -> None:
+    def __init__(self, matman: MatMan, smf: SphereMeshFactory) -> None:
         self._stage = omni.usd.get_context().get_stage()
         self._count = 0
+        self._matman = matman
+        self._smf = smf
 
     def GenPrep(self):
-        self._smf = SphereMeshFactory()
-        self._smf._nlat = self._nlat
-        self._smf._nlng = self._nlng
-        self._smf._matman = self._matman
-        self._smf.GenPrep()
+        pass
+        # self._smf = SphereMeshFactory(self._matman)
+        # self._smf._nlat = self._nlat
+        # self._smf._nlng = self._nlng
+        # self._smf.GenPrep()
 
     def Clear(self):
         self._createlist = []
@@ -69,15 +71,6 @@ class SphereFlakeFactory():
         totquads, totprims = SphereFlakeFactory.CalcQuadsAndPrims(depth, nring, nlat, nlng)
         return totquads * 2, totprims
 
-    @staticmethod
-    def GetFlakeExtent(depth: int, rad: float, radratio: float):
-        # sz = rad  +  (1+(radratio))**depth # old method
-        sz = rad
-        nrad = rad
-        for i in range(depth):
-            nrad = radratio*nrad
-            sz += 2*nrad
-        return Gf.Vec3f(sz, sz, sz)
 
     @staticmethod
     def GetCenterPosition(ix: int, nx: int,  iz: int, nz: int,  extentvec: Gf.Vec3f, gap: float = 1.1):
@@ -104,20 +97,30 @@ class SphereFlakeFactory():
         UsdShade.MaterialBindingAPI(cube).Bind(mtl)
         return cube
 
-    @staticmethod
-    def GenerateManySnowFlakes(genmode: str, genform: str, nlat: int, nlng: int,
-                               rad: float, radratio: float, depth: int,
-                               nx: int, nz: int,
-                               matman: ovut.MatMan, matname: str, bbmatname: str,
-                               initcount: int, bounds_visible: bool):
-        sff = SphereFlakeFactory(matman, genmode, genform,  nlat, nlng, rad, radratio)
+    # @staticmethod
+    # def GenerateManySnowFlakes(genmode: str, genform: str, nlat: int, nlng: int,
+    #                            rad: float, radratio: float, depth: int,
+    #                            nx: int, nz: int,
+    #                            matman: ovut.MatMan, matname: str, bbmatname: str,
+    #                            initcount: int, bounds_visible: bool):
+    #     sff = SphereFlakeFactory(matman, genmode, genform,  nlat, nlng, rad, radratio)
 
-        rv = sff.GenerateMany(depth, nx, nz, matname, bbmatname, initcount, bounds_visible)
-        return rv
+    #     rv = sff.GenerateMany(depth, nx, nz, matname, bbmatname, initcount, bounds_visible)
+    #     return rv
+
+    def GetSnowFlakeBoundingBox(self):
+        # sz = rad  +  (1+(radratio))**depth # old method
+        sz = self._rad
+        nrad = sz
+        for i in range(self._depth):
+            nrad = self._radratio*nrad
+            sz += 2*nrad
+        return Gf.Vec3f(sz, sz, sz)
 
     def GenerateMany(self, depth, nx, nz, matname, bbmatname, bounds_visible):
         cpt = Gf.Vec3f(0, self._rad, 0)
-        extentvec = self.GetFlakeExtent(depth, self._rad, self._radratio)
+        # extentvec = self.GetFlakeExtent(depth, self._rad, self._radratio)
+        extentvec = self.GetSnowFlakeBoundingBox()
         count = self._count
         self._createlist = []
         self._bbcubelist = []

@@ -12,7 +12,7 @@ class SphereMeshFactoryV1():
     _show_normals = False
     _matman = None
     _nlat = 8
-    _nlong = 8
+    _nlng = 8
     _total_quads = 0
 
     def __init__(self) -> None:
@@ -43,7 +43,7 @@ class SphereMeshFactoryV1():
         # so a total of (nlat+1)*(nlong) vertices
         spheremesh = UsdGeom.Mesh.Define(self._stage, name)
         nlat = self._nlat
-        nlong = self._nlong
+        nlong = self._nlng
         vtxcnt = int(0)
         pts = []
         nrm = []
@@ -116,19 +116,19 @@ class SphereMeshFactoryV1():
 class SphereMeshFactory():
 
     _show_normals = False
-    _depth = 1
-    _matman = None
+    _matman: MatMan = None
     _nlat = 8
-    _nlong = 8
+    _nlng = 8
     _total_quads = 0
     _dotexcoords = True
 
-    def __init__(self) -> None:
+    def __init__(self, matman: MatMan) -> None:
+        self._matman = matman
         self._stage = omni.usd.get_context().get_stage()
 
     def GenPrep(self):
-        self._nquads = self._nlat*self._nlong
-        self._nverts = (self._nlat+1)*(self._nlong)
+        self._nquads = self._nlat*self._nlng
+        self._nverts = (self._nlat+1)*(self._nlng)
         self._normbuf = np.zeros((self._nverts, 3), dtype=np.float32)
         self._txtrbuf = np.zeros((self._nverts, 2), dtype=np.float32)
         self._facebuf = np.zeros((self._nquads, 1), dtype=np.int32)
@@ -155,7 +155,7 @@ class SphereMeshFactory():
 
     def MakeArrays(self):
         nlat = self._nlat
-        nlong = self._nlong
+        nlong = self._nlng
         for i in range(nlat):
             offset = i * nlong
             for j in range(nlong):
@@ -193,7 +193,7 @@ class SphereMeshFactory():
 
     def ShowNormals(self, vertbuf):
         nlat = self._nlat
-        nlong = self._nlong
+        nlong = self._nlng
         for i in range(nlat+1):
             for j in range(nlong):
                 vidx = i*nlong+j

@@ -17,7 +17,7 @@ import nvidia_smi
 # Any class derived from `omni.ext.IExt` in top level module (defined in `python.modules` of `extension.toml`) will be
 # instantiated when extension gets enabled and `on_startup(ext_id)` will be called. Later when extension gets disabled
 # on_shutdown() is called.
-class PrimsExtension(omni.ext.IExt):
+class SphereflakeBenchmarkExtension(omni.ext.IExt):
     # ext_id is current extension id. It can be used with extension manager to query additional information, like where
     # this extension is located on filesystem.
     _stage = None
@@ -40,8 +40,8 @@ class PrimsExtension(omni.ext.IExt):
         prim: Usd.Prim = self._stage .GetPrimAtPath(prim_path_sdf)
         if not prim.IsValid():
             okc.execute('CreateMeshPrimWithDefaultXform',	prim_type="Plane", prim_path=ppathstr)
-            extent3f = SphereFlakeFactory.GetFlakeExtent(self.smf._depth, self._sf_size, self._sf_radratio)
-
+            # extent3f = SphereFlakeFactory.GetFlakeExtent(self.sff._depth, self._sf_size, self._sf_radratio)
+            extent3f = self.sff.GetSnowFlakeBoundingBox()
             # self._floor_xdim = 4 + self._nsf_x
             # self._floor_zdim = 4 + self._nsf_z
             self._floor_xdim = extent3f[0] / 10
@@ -58,13 +58,12 @@ class PrimsExtension(omni.ext.IExt):
             print(f"nvidia_smi.__file__:{nvidia_smi.__file__}")
             print(f"omni.ui.__file__:{omni.ui.__file__}")
             print(f"omni.ext.__file__:{omni.ext.__file__}")
-            # print(f"PYTHONPATH:{sys.path}")
 
     def ensure_stage(self):
-        print("ensure_stage")
+        # print("ensure_stage")
         if self._stage is None:
             self._stage = omni.usd.get_context().get_stage()
-            print(f"ensure_stage got stage:{self._stage}")
+            # print(f"ensure_stage got stage:{self._stage}")
             UsdGeom.SetStageUpAxis(self._stage, UsdGeom.Tokens.y)
             self._total_quads = 0
             self.setup_environment()
@@ -86,6 +85,11 @@ class PrimsExtension(omni.ext.IExt):
         print(f"on_stage - stage:{omni.usd.get_context().get_stage()}")
         self.ensure_stage()
 
+# Todo:
+# Remove _nsf_x and _nsf_z into sff
+# Remove sf_radratio into sff
+# Remove _sf_size into smf (and sff?)
+
     def on_startup(self, ext_id):
         print("[omni.example.spawn_prims] omni example spawn_prims startup <<<<<<<<<<<<<<<<<")
         print(f"on_startup - stage:{omni.usd.get_context().get_stage()}")
@@ -97,13 +101,14 @@ class PrimsExtension(omni.ext.IExt):
         self._window = ui.Window("Spawn Primitives", width=300, height=300)
         self._total_quads = 0
         self._sf_size = 50
-        self._sf_nlat = 8
-        self._sf_nlng = 8
         self._sf_radratio = 0.3
+
         self._sf_depth_but: ui.Button = None
         self._sf_spawn_but: ui.Button = None
         self._sf_nlat_but: ui.Button = None
         self._sf_nlng_but: ui.Button = None
+        self._sf_radratio_slider: ui.Slider = None
+
         self._matbox: ui.ComboBox = None
         self._curprim = "Sphere"
         self._prims = ["Sphere", "Cube", "Cone", "Torus", "Cylinder", "Plane", "Disk", "Capsule",
@@ -117,8 +122,8 @@ class PrimsExtension(omni.ext.IExt):
         self._sf_test2 = False
         self._write_out_syspath = False
 
-        self.smf = SphereMeshFactory()
-        self.sff = SphereFlakeFactory()
+        self.smf = SphereMeshFactory(self._matman)
+        self.sff = SphereFlakeFactory(self._matman, self.smf)
 
         with self._window.frame:
             with ui.VStack():
@@ -140,9 +145,6 @@ class PrimsExtension(omni.ext.IExt):
                 def on_click_spheremesh():
                     self.ensure_stage()
 
-                    self.smf._matman = self._matman
-                    self.smf._nlat = self._sf_nlat
-                    self.smf._nlng = self._sf_nlng
                     self.smf.GenPrep()
 
                     matname = self.get_curmat_name()
@@ -157,12 +159,9 @@ class PrimsExtension(omni.ext.IExt):
                     start_time = time.time()
 
                     sff = self.sff
-                    sff._matman = self._matman
                     sff._genmode = self.get_sf_genmode()
                     sff._genform = self.get_sf_genform()
                     sff._rad = self._sf_size
-                    sff._nlat = self._sf_nlat
-                    sff._nlng = self._sf_nlng
                     sff._radratio = self._sf_radratio_slider.get_value_as_float()
                     sff.GenPrep()
 
@@ -170,7 +169,8 @@ class PrimsExtension(omni.ext.IExt):
                     primpath = f"/World/SphereFlake_{self._count}"
 
                     self._count += 1
-                    depth = self.smf._depth
+                    depth = self.sff._depth
+                    print(f"SphereFlake depth: {depth}")
                     sfmname = self.get_curmat_name()
                     sff.Generate(primpath, sfmname, depth, cpt)
 
@@ -186,12 +186,10 @@ class PrimsExtension(omni.ext.IExt):
                     sff._genmode = self.get_sf_genmode()
                     sff._genform = self.get_sf_genform()
                     sff._rad = self._sf_size
-                    sff._nlat = self._sf_nlat
-                    sff._nlng = self._sf_nlng
                     sff._radratio = self._sf_radratio
                     sff.GenPrep()
 
-                    depth = self.smf._depth
+                    depth = self.sff._depth
                     sfmname = self.get_curmat_name()
                     bbmname = self.get_curmat_bbox_name()
                     new_count = sff.GenerateMany(depth, self._nsf_x, self._nsf_z,
@@ -237,31 +235,34 @@ class PrimsExtension(omni.ext.IExt):
                     UsdShade.MaterialBindingAPI(prim).Bind(material)
 
                 def on_click_sfdepth(x, y, button, modifier):
-                    depth = self.smf._depth
+                    depth = self.sff._depth
                     depth += 1 if button == 1 else -1
                     if depth > 5:
                         depth = 0
                     self._sf_depth_but.text = f"Depth:{depth}"
-                    self.smf._depth = depth
                     self.sff._depth = depth
                     UpdateNQuads()
                     UpdateMQuads()
                     UpdateGpuMemory()
 
                 def on_click_nlat(x, y, button, modifier):
-                    self._sf_nlat += 1 if button == 1 else -1
-                    if self._sf_nlat > 16:
-                        self._sf_nlat = 2
-                    self._sf_nlat_but.text = f"Nlat:{self._sf_nlat}"
+                    nlat = self.smf._nlat
+                    nlat += 1 if button == 1 else -1
+                    if nlat > 16:
+                        nlat = 2
+                    self._sf_nlat_but.text = f"Nlat:{nlat}"
+                    self.smf._nlat = nlat
                     UpdateNQuads()
                     UpdateMQuads()
                     UpdateGpuMemory()
 
                 def on_click_nlng(x, y, button, modifier):
-                    self._sf_nlng += 1 if button == 1 else -1
-                    if self._sf_nlng > 16:
-                        self._sf_nlng = 3
-                    self._sf_nlng_but.text = f"Nlng:{self._sf_nlng}"
+                    nlng = self.smf._nlng
+                    nlng += 1 if button == 1 else -1
+                    if nlng > 16:
+                        nlng = 3
+                    self._sf_nlng_but.text = f"Nlng:{nlng}"
+                    self.smf._nlng = nlng
                     UpdateNQuads()
                     UpdateMQuads()
                     UpdateGpuMemory()
@@ -312,16 +313,20 @@ class PrimsExtension(omni.ext.IExt):
                 def UpdateNQuads():
                     genform = self.get_sf_genform()
                     nring = 9 if genform == "Classic" else 8
-                    depth = self.smf._depth
-                    ntris, nprims = SphereFlakeFactory.CalcTrisAndPrims(depth, nring, self._sf_nlat, self._sf_nlng)
+                    depth = self.sff._depth
+                    nlat = self.smf._nlat
+                    nlng = self.smf._nlng
+                    ntris, nprims = SphereFlakeFactory.CalcTrisAndPrims(depth, nring, nlat, nlng)
                     elap = SphereFlakeFactory.GetLastGenTime()
                     self._sf_spawn_but.text = f"Spawn ShereFlake\n tris:{ntris:,} prims:{nprims:,}\ngen: {elap:.2f} s"
 
                 def UpdateMQuads():
                     genform = self.get_sf_genform()
                     nring = 9 if genform == "Classic" else 8
-                    depth = self.smf._depth
-                    ntris, nprims = SphereFlakeFactory.CalcTrisAndPrims(depth, nring, self._sf_nlat, self._sf_nlng)
+                    depth = self.sff._depth
+                    nlat = self.smf._nlat
+                    nlng = self.smf._nlng
+                    ntris, nprims = SphereFlakeFactory.CalcTrisAndPrims(depth, nring, nlat, nlng)
                     tottris = ntris*self._nsf_x*self._nsf_z
                     self._msf_spawn_but.text = f"Multi ShereFlake\ntris:{tottris:,} prims:{nprims:,}"
 
@@ -389,14 +394,16 @@ class PrimsExtension(omni.ext.IExt):
                         self._sf_spawn_but = ui.Button("Spawn SphereFlake",
                                                        style={'background_color': darkred},
                                                        clicked_fn=lambda: on_click_sphereflake())
-                        self._sf_depth_but = ui.Button(f"Depth:{self.smf._depth}",
+                        self._sf_depth_but = ui.Button(f"Depth:{self.sff._depth}",
                                                        style={'background_color': darkgreen},
                                                        mouse_pressed_fn=lambda x, y, b, m: on_click_sfdepth(x, y, b, m))
                         with ui.VStack():
-                            self._sf_nlat_but = ui.Button(f"Nlat:{self._sf_nlat}",
+                            nlat = self.smf._nlat
+                            self._sf_nlat_but = ui.Button(f"Nlat:{nlat}",
                                                           style={'background_color': darkgreen},
                                                           mouse_pressed_fn=lambda x, y, b, m: on_click_nlat(x, y, b, m))
-                            self._sf_nlng_but = ui.Button(f"Nlng:{self._sf_nlng}",
+                            nlng = self.smf._nlng
+                            self._sf_nlng_but = ui.Button(f"Nlng:{nlng}",
                                                           style={'background_color': darkgreen},
                                                           mouse_pressed_fn=lambda x, y, b, m: on_click_nlng(x, y, b, m))
 
