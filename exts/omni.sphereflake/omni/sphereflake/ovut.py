@@ -101,15 +101,26 @@ class MatMan():
         self.matlib[matname]["mat"] = mtl
         return mtl
 
-    def CopyRemoteMaterial(self, matname, urlbranch):
-        print("CopyRemoteMaterial")
+    fetchCount: int = 0
+    skipCount: int = 0
+
+    def CopyRemoteMaterial(self, matname, urlbranch, force=False):
+        print(f"CopyRemoteMaterial matname:{matname} urlbranch:{urlbranch} force:{force}")
         stage = omni.usd.get_context().get_stage()
         baseurl = 'https://omniverse-content-production.s3.us-west-2.amazonaws.com'
         url = f'{baseurl}/Materials/{urlbranch}.mdl'
         mpath = f'/World/Looks/{matname}'
-        okc.execute('CreateMdlMaterialPrimCommand', mtl_url=url, mtl_name=matname, mtl_path=mpath)
-        mtl: UsdShade.Material = UsdShade.Material(stage.GetPrimAtPath(mpath) )
-        print(f"CopyRemoteMaterial {matname} {url} {mpath} {mtl}")
+        action = ""
+        # Note we should not execute the next command if the material already exists
+        if force or not stage.GetPrimAtPath(mpath):
+            okc.execute('CreateMdlMaterialPrimCommand', mtl_url=url, mtl_name=matname, mtl_path=mpath)
+            action = "fetch"
+            self.fetchCount += 1
+        else:
+            action = "skip"
+            self.skipCount += 1
+        mtl: UsdShade.Material = UsdShade.Material(stage.GetPrimAtPath(mpath))
+        print(f"CopyRemoteMaterial {mpath} mtl:{mtl} action:{action}")
         # self.matlib[matname] = {"name": matname, "typ": "rgb", "mat": mtl}
         self.matlib[matname]["mat"] = mtl
         return mtl
@@ -126,7 +137,7 @@ class MatMan():
         self.matlib[matname]["realized"] = True
 
     def SetupMaterial(self, matname: str, typ: str, spec: str):
-        print(f"SetupMaterial {matname} {typ} {spec}")
+        # print(f"SetupMaterial {matname} {typ} {spec}")
         matpath = f"/World/Looks/{matname}"
         self.matlib[matname] = {"name": matname,
                                 "typ": typ,

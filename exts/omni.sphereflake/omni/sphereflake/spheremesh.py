@@ -43,7 +43,8 @@ class SphereMeshFactoryV1():
         # so a total of (nlat+1)*(nlong) vertices
         spheremesh = UsdGeom.Mesh.Define(self._stage, name)
         nlat = self._nlat
-        nlong = self._nlng
+        nlng = self._nlng
+
         vtxcnt = int(0)
         pts = []
         nrm = []
@@ -52,9 +53,9 @@ class SphereMeshFactoryV1():
         idx = []
         polegap = 0.01  # prevents the vertices from being exactly on the poles
         for i in range(nlat+1):
-            for j in range(nlong):
+            for j in range(nlng):
                 theta = polegap + (i * (math.pi-2*polegap) / float(nlat))
-                phi = j * 2 * math.pi / float(nlong)
+                phi = j * 2 * math.pi / float(nlng)
                 nx = math.sin(theta) * math.cos(phi)
                 ny = math.cos(theta)
                 nz = math.sin(theta) * math.sin(phi)
@@ -75,19 +76,19 @@ class SphereMeshFactoryV1():
                     self.MakeMarker(nmname, "blue", npt, 1)
 
         for i in range(nlat):
-            offset = i * nlong
-            for j in range(nlong):
+            offset = i * nlng
+            for j in range(nlng):
                 fvc.append(int(4))
-                if j < nlong - 1:
+                if j < nlng - 1:
                     i1 = offset+j
                     i2 = offset+j+1
-                    i3 = offset+j+nlong+1
-                    i4 = offset+j+nlong
+                    i3 = offset+j+nlng+1
+                    i4 = offset+j+nlng
                 else:
                     i1 = offset+j
                     i2 = offset
-                    i3 = offset+nlong
-                    i4 = offset+j+nlong
+                    i3 = offset+nlng
+                    i4 = offset+j+nlng
                 idx.extend([i1, i2, i3, i4])
                 # print(f"i:{i} j:{j} vtxcnt:{vtxcnt} i1:{i1} i2:{i2} i3:{i3} i4:{i4}")
 

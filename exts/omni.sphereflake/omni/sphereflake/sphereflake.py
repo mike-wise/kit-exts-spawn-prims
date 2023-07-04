@@ -12,20 +12,23 @@ from .ovut import MatMan
 
 latest_sf_gen_time = 0
 
-
 class SphereFlakeFactory():
 
     _matman: MatMan = None
-    _genmode = "tris"
-    _genform = "sphere"
+    _smf: SphereMeshFactory = None
+    _genmode = "UsdSphere"
+    _genform = "Classic"
     _depth = 1
-    _nlat = 8
-    _nlng = 8
     _rad = 50
     _radratio = 0.3
     _start_timee = 0
-    _createlist = []
-    _bbcubelist = []
+    _createlist: list = []
+    _bbcubelist: list = []
+    _nsfx = 1
+    _nsfz = 1
+    _sf_matname = "Mirror"
+    _bb_matname = "Red Glass"
+    _make_bounds_visible = False
 
     org = Gf.Vec3f(0, 0, 0)
     xax = Gf.Vec3f(1, 0, 0)
@@ -39,11 +42,16 @@ class SphereFlakeFactory():
         self._smf = smf
 
     def GenPrep(self):
+        self._smf.GenPrep()
         pass
-        # self._smf = SphereMeshFactory(self._matman)
-        # self._smf._nlat = self._nlat
-        # self._smf._nlng = self._nlng
-        # self._smf.GenPrep()
+
+    @staticmethod
+    def GetGenModes():
+        return ["UsdSphere", "DirectMesh", "AsyncMesh", "OmniSphere"]
+
+    @staticmethod
+    def GetGenForms():
+        return ["Classic", "Flat-8"]
 
     def Clear(self):
         self._createlist = []
@@ -55,25 +63,24 @@ class SphereFlakeFactory():
         else:
             carb.log.error(f"SphereFlakeFactory.Set: no attribute {attname}")
 
-    @staticmethod
-    def CalcQuadsAndPrims(depth: int, nring: int, nlat: int, nlng: int):
+    def CalcQuadsAndPrims(self):
+        nring = 9 if self._genform == "Classic" else 8
+        nlat = self._smf._nlat
+        nlng = self._smf._nlng
         totquads = 0
         totprims = 0
-        for i in range(depth+1):
+        for i in range(self._depth+1):
             nspheres = nring**(i)
             nquads = nspheres * nlat * nlng
             totquads += nquads
             totprims += nspheres
         return totquads, totprims
 
-    @staticmethod
-    def CalcTrisAndPrims(depth: int, nring: int, nlat: int, nlng: int):
-        totquads, totprims = SphereFlakeFactory.CalcQuadsAndPrims(depth, nring, nlat, nlng)
+    def CalcTrisAndPrims(self):
+        totquads, totprims = self.CalcQuadsAndPrims()
         return totquads * 2, totprims
 
-
-    @staticmethod
-    def GetCenterPosition(ix: int, nx: int,  iz: int, nz: int,  extentvec: Gf.Vec3f, gap: float = 1.1):
+    def GetCenterPosition(self, ix: int, nx: int,  iz: int, nz: int,  extentvec: Gf.Vec3f, gap: float = 1.1):
         ixoff = (nx-1)/2
         izoff = (nz-1)/2
         x = (ix-ixoff) * extentvec[0] * gap * 2
@@ -86,29 +93,17 @@ class SphereFlakeFactory():
         global latest_sf_gen_time
         return latest_sf_gen_time
 
-    @staticmethod
-    def SpawnCubeWithMat(primpath, cenpt, extent, matman, matname):
+    def SpawnBBcube(self, primpath, cenpt, extent, bbmatname):
         stage = omni.usd.get_context().get_stage()
         xformPrim = UsdGeom.Xform.Define(stage, primpath)
         UsdGeom.XformCommonAPI(xformPrim).SetTranslate((cenpt[0], cenpt[1], cenpt[2]))
         UsdGeom.XformCommonAPI(xformPrim).SetScale((extent[0], extent[1], extent[2]))
         cube = UsdGeom.Cube.Define(stage, primpath)
-        mtl = matman.GetMaterial(matname)
+        mtl = self._matman.GetMaterial(bbmatname)
         UsdShade.MaterialBindingAPI(cube).Bind(mtl)
         return cube
 
-    # @staticmethod
-    # def GenerateManySnowFlakes(genmode: str, genform: str, nlat: int, nlng: int,
-    #                            rad: float, radratio: float, depth: int,
-    #                            nx: int, nz: int,
-    #                            matman: ovut.MatMan, matname: str, bbmatname: str,
-    #                            initcount: int, bounds_visible: bool):
-    #     sff = SphereFlakeFactory(matman, genmode, genform,  nlat, nlng, rad, radratio)
-
-    #     rv = sff.GenerateMany(depth, nx, nz, matname, bbmatname, initcount, bounds_visible)
-    #     return rv
-
-    def GetSnowFlakeBoundingBox(self):
+    def GetSphereFlakeBoundingBox(self):
         # sz = rad  +  (1+(radratio))**depth # old method
         sz = self._rad
         nrad = sz
@@ -117,11 +112,15 @@ class SphereFlakeFactory():
             sz += 2*nrad
         return Gf.Vec3f(sz, sz, sz)
 
-    def GenerateMany(self, depth, nx, nz, matname, bbmatname, bounds_visible):
+    def GenerateMany(self):
+        self.GenPrep()
         cpt = Gf.Vec3f(0, self._rad, 0)
         # extentvec = self.GetFlakeExtent(depth, self._rad, self._radratio)
-        extentvec = self.GetSnowFlakeBoundingBox()
+        nx = self._nsfx
+        nz = self._nsfz
+        extentvec = self.GetSphereFlakeBoundingBox()
         count = self._count
+
         self._createlist = []
         self._bbcubelist = []
         for ix in range(nx):
@@ -131,29 +130,28 @@ class SphereFlakeFactory():
 
                 cpt = self.GetCenterPosition(ix, nx, iz, nz, extentvec)
 
-                self.Generate(primpath, matname, depth, cpt)
+                self.Generate(primpath, cpt)
                 self._createlist.append(primpath)
                 bnd_cubepath = primpath+"/bounds"
-
-                bnd_cube = SphereFlakeFactory.SpawnCubeWithMat(bnd_cubepath, cpt, extentvec, self._matman, bbmatname)
+                bnd_cube = self.SpawnBBcube(bnd_cubepath, cpt, extentvec, self._bb_matname)
                 self._bbcubelist.append(bnd_cubepath)
-                UsdGeom.Imageable(bnd_cube).MakeVisible(bounds_visible)
+                if self._make_bounds_visible:
+                    UsdGeom.Imageable(bnd_cube).MakeVisible()
+                else:
+                    UsdGeom.Imageable(bnd_cube).MakeInvisible()
         return (count)
 
-    def SetBoundsVisibility(self, visible: bool):
-        for primpath in self._bbcubelist:
-            prim = self._stage.GetPrimAtPath(primpath)
-            print(f"primpath={primpath} prim={prim} visible={visible}")
-            okc.execute('ToggleVisibilitySelectedPrims', selected_paths=[primpath])
+    def ToggleBoundsVisiblity(self):
+        # print(f"ToggleBoundsVisiblity: {self._bbcubelist}")
+        okc.execute('ToggleVisibilitySelectedPrims', selected_paths=self._bbcubelist)
 
-    def Generate(self, sphflkname: str, matname: str, depth: int, cenpt: Gf.Vec3f):
+    def Generate(self, sphflkname: str, cenpt: Gf.Vec3f):
 
         global latest_sf_gen_time
 
         self._start_timee = time.time()
         self._total_quads = 0
 
-        self._depth = depth
         self._nring = 8
         ovut.delete_if_exists(sphflkname)
 
@@ -161,12 +159,13 @@ class SphereFlakeFactory():
         UsdGeom.XformCommonAPI(xformPrim).SetTranslate((0, 0, 0))
         UsdGeom.XformCommonAPI(xformPrim).SetRotate((0, 0, 0))
 
-        mxdepth = depth
+        mxdepth = self._depth
         basept = cenpt
-        self.GenRecursively(sphflkname, matname, mxdepth, depth, basept, cenpt, self._rad)
+        matname = self._sf_matname
+        self.GenRecursively(sphflkname, matname, mxdepth, self._depth, basept, cenpt, self._rad)
 
         elap = time.time() - self._start_timee
-        print(f"GenerateSF {sphflkname} {matname} {depth} {cenpt} totquads:{self._total_quads} in {elap:.3f} secs")
+        # print(f"GenerateSF {sphflkname} {matname} {depth} {cenpt} totquads:{self._total_quads} in {elap:.3f} secs")
 
         latest_sf_gen_time = elap
 

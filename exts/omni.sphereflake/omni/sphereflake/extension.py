@@ -27,10 +27,9 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
     _floor_zdim = 5
     _bounds_visible = False
     _sf_size = 50
-    _sf_radratio = 0.3
     _vsc_test8 = False
 
-    def setup_environment(self, force: bool = False):
+    def setup_environment(self, extent3f: Gf.Vec3f,  force: bool = False):
         ppathstr = "/World/Floor"
         if force:
             delete_if_exists(ppathstr)
@@ -40,10 +39,7 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
         prim: Usd.Prim = self._stage .GetPrimAtPath(prim_path_sdf)
         if not prim.IsValid():
             okc.execute('CreateMeshPrimWithDefaultXform',	prim_type="Plane", prim_path=ppathstr)
-            # extent3f = SphereFlakeFactory.GetFlakeExtent(self.sff._depth, self._sf_size, self._sf_radratio)
-            extent3f = self.sff.GetSnowFlakeBoundingBox()
-            # self._floor_xdim = 4 + self._nsf_x
-            # self._floor_zdim = 4 + self._nsf_z
+
             self._floor_xdim = extent3f[0] / 10
             self._floor_zdim = extent3f[2] / 10
             okc.execute('TransformMultiPrimsSRTCpp',
@@ -55,9 +51,9 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
                         sky_url=f'{baseurl}/Assets/Skies/2022_1/Skies/Dynamic/CumulusLight.usd',
                         sky_path='/Environment/sky')
 
-            print(f"nvidia_smi.__file__:{nvidia_smi.__file__}")
-            print(f"omni.ui.__file__:{omni.ui.__file__}")
-            print(f"omni.ext.__file__:{omni.ext.__file__}")
+            # print(f"nvidia_smi.__file__:{nvidia_smi.__file__}")
+            # print(f"omni.ui.__file__:{omni.ui.__file__}")
+            # print(f"omni.ext.__file__:{omni.ext.__file__}")
 
     def ensure_stage(self):
         # print("ensure_stage")
@@ -66,7 +62,8 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
             # print(f"ensure_stage got stage:{self._stage}")
             UsdGeom.SetStageUpAxis(self._stage, UsdGeom.Tokens.y)
             self._total_quads = 0
-            self.setup_environment()
+            extent3f = self.sff.GetSphereFlakeBoundingBox()
+            self.setup_environment(extent3f)
 
     def create_billboard(self, primpath: str):
         UsdGeom.SetStageUpAxis(self._stage, UsdGeom.Tokens.y)
@@ -82,17 +79,15 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
         return billboard
 
     def on_stage(self, ext_id):
-        print(f"on_stage - stage:{omni.usd.get_context().get_stage()}")
+        # print(f"on_stage - stage:{omni.usd.get_context().get_stage()}")
         self.ensure_stage()
 
 # Todo:
-# Remove _nsf_x and _nsf_z into sff
-# Remove sf_radratio into sff
 # Remove _sf_size into smf (and sff?)
 
     def on_startup(self, ext_id):
-        print("[omni.example.spawn_prims] omni example spawn_prims startup <<<<<<<<<<<<<<<<<")
-        print(f"on_startup - stage:{omni.usd.get_context().get_stage()}")
+        # print("[omni.example.spawn_prims] omni example spawn_prims startup <<<<<<<<<<<<<<<<<")
+        # print(f"on_startup - stage:{omni.usd.get_context().get_stage()}")
         self._matman = MatMan()
         self._count = 0
         self._current_material_name = "Mirror"
@@ -101,7 +96,6 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
         self._window = ui.Window("Spawn Primitives", width=300, height=300)
         self._total_quads = 0
         self._sf_size = 50
-        self._sf_radratio = 0.3
 
         self._sf_depth_but: ui.Button = None
         self._sf_spawn_but: ui.Button = None
@@ -110,15 +104,13 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
         self._sf_radratio_slider: ui.Slider = None
 
         self._matbox: ui.ComboBox = None
-        self._curprim = "Sphere"
         self._prims = ["Sphere", "Cube", "Cone", "Torus", "Cylinder", "Plane", "Disk", "Capsule",
                        "Billboard", "SphereMesh"]
-        self._nsf_x = 1
-        self._nsf_z = 1
-        self._sf_gen_modes = ["DirectMesh", "AsyncMesh", "OmniSphere", "UsdSphere"]
-        self._sf_gen_mode = "UsdSphere"
-        self._sf_gen_forms = ["Classic", "Flat-8"]
-        self._sf_gen_form = "Classic"
+        self._curprim = self._prims[0]
+        self._sf_gen_modes = SphereFlakeFactory.GetGenModes()
+        self._sf_gen_mode = self._sf_gen_modes[0]
+        self._sf_gen_forms = SphereFlakeFactory.GetGenForms()
+        self._sf_gen_form = self._sf_gen_forms[0]
         self._sf_test2 = False
         self._write_out_syspath = False
 
@@ -131,7 +123,8 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
                 def toggle_bounds():
                     self.ensure_stage()
                     self._bounds_visible = not self._bounds_visible
-                    self.sff.SetBoundsVisibility(self._bounds_visible)
+                    self._tog_bounds_but.text = f"Bounds:{self._bounds_visible}"
+                    self.sff.ToggleBoundsVisiblity()
 
                 def on_click_billboard():
                     self.ensure_stage()
@@ -163,16 +156,14 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
                     sff._genform = self.get_sf_genform()
                     sff._rad = self._sf_size
                     sff._radratio = self._sf_radratio_slider.get_value_as_float()
-                    sff.GenPrep()
+                    sff._sf_matname = self.get_curmat_name()
+                    sff._bb_matname = self.get_curmat_bbox_name()
 
                     cpt = Gf.Vec3f(0, self._sf_size, 0)
                     primpath = f"/World/SphereFlake_{self._count}"
 
                     self._count += 1
-                    depth = self.sff._depth
-                    print(f"SphereFlake depth: {depth}")
-                    sfmname = self.get_curmat_name()
-                    sff.Generate(primpath, sfmname, depth, cpt)
+                    sff.Generate(primpath, cpt)
 
                     elap = time.time() - start_time
                     self._statuslabel.text = f"SphereFlake took elapsed: {elap:.2f} s"
@@ -182,30 +173,31 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
                 async def gensflakes():
 
                     sff = self.sff
+
                     sff._matman = self._matman
                     sff._genmode = self.get_sf_genmode()
                     sff._genform = self.get_sf_genform()
                     sff._rad = self._sf_size
-                    sff._radratio = self._sf_radratio
-                    sff.GenPrep()
+                    sff._radratio = self._sf_radratio_slider.get_value_as_float()
+                    sff._sf_matname = self.get_curmat_name()
 
-                    depth = self.sff._depth
-                    sfmname = self.get_curmat_name()
-                    bbmname = self.get_curmat_bbox_name()
-                    new_count = sff.GenerateMany(depth, self._nsf_x, self._nsf_z,
-                                                 sfmname, bbmname, self._bounds_visible)
+                    sff._make_bounds_visible = self._bounds_visible
+                    sff._bb_matname = self.get_curmat_bbox_name()
+
+                    new_count = sff.GenerateMany()
 
                     self._count += new_count
 
                 async def on_click_multi_sphereflake():
                     self.ensure_stage()
-                    self.setup_environment(force=True)
+                    extent3f = self.sff.GetSphereFlakeBoundingBox()
+                    self.setup_environment(extent3f, force=True)
 
                     start_time = time.time()
                     await gensflakes()
                     elap = time.time() - start_time
 
-                    nflakes = self._nsf_x * self._nsf_z
+                    nflakes = self.sff._nsfx * self.sff._nsfz
 
                     self._statuslabel.text = f"{nflakes} flakes took elapsed: {elap:.2f} s"
 
@@ -234,11 +226,17 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
                     prim: Usd.Prim = self._stage.GetPrimAtPath(primpath)
                     UsdShade.MaterialBindingAPI(prim).Bind(material)
 
+                def round_increment(val: int, butval: bool, maxval: int, minval: int = 0):
+                    inc = 1 if butval else -1
+                    val += inc
+                    if val > maxval:
+                        val = minval
+                    if val < minval:
+                        val = maxval
+                    return val
+
                 def on_click_sfdepth(x, y, button, modifier):
-                    depth = self.sff._depth
-                    depth += 1 if button == 1 else -1
-                    if depth > 5:
-                        depth = 0
+                    depth = round_increment(self.sff._depth, button == 1, 5, 0)
                     self._sf_depth_but.text = f"Depth:{depth}"
                     self.sff._depth = depth
                     UpdateNQuads()
@@ -246,10 +244,7 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
                     UpdateGpuMemory()
 
                 def on_click_nlat(x, y, button, modifier):
-                    nlat = self.smf._nlat
-                    nlat += 1 if button == 1 else -1
-                    if nlat > 16:
-                        nlat = 2
+                    nlat = round_increment(self.smf._nlat, button == 1, 16, 3)
                     self._sf_nlat_but.text = f"Nlat:{nlat}"
                     self.smf._nlat = nlat
                     UpdateNQuads()
@@ -257,10 +252,7 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
                     UpdateGpuMemory()
 
                 def on_click_nlng(x, y, button, modifier):
-                    nlng = self.smf._nlng
-                    nlng += 1 if button == 1 else -1
-                    if nlng > 16:
-                        nlng = 3
+                    nlng = round_increment(self.smf._nlng, button == 1, 16, 3)
                     self._sf_nlng_but.text = f"Nlng:{nlng}"
                     self.smf._nlng = nlng
                     UpdateNQuads()
@@ -268,18 +260,16 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
                     UpdateGpuMemory()
 
                 def on_click_sfx(x, y, button, modifier):
-                    self._nsf_x += 1 if button == 1 else -1
-                    if self._nsf_x > 16:
-                        self._nsf_x = 1
-                    self._nsf_x_but.text = f"SF - x:{self._nsf_x}"
+                    nsfx = round_increment(self.sff._nsfx, button == 1, 20, 1)
+                    self._nsf_x_but.text = f"SF - x:{nsfx}"
+                    self.sff._nsfx = nsfx
                     UpdateMQuads()
                     UpdateGpuMemory()
 
                 def on_click_sfz(x, y, button, modifier):
-                    self._nsf_z += 1 if button == 1 else -1
-                    if self._nsf_z > 16:
-                        self._nsf_z = 1
-                    self._nsf_z_but.text = f"SF - z:{self._nsf_z}"
+                    nsfz = round_increment(self.sff._nsfz, button == 1, 20, 1)
+                    self._nsf_z_but.text = f"SF - z:{nsfz}"
+                    self.sff._nsfz = nsfz
                     UpdateMQuads()
                     UpdateGpuMemory()
 
@@ -295,7 +285,7 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
                         prefix = cname.split("_")[0]
                         dodelete = prefix in ["SphereFlake", "SphereMesh", "Prim"]
                         if dodelete:
-                            print(f"deleting {cname}")
+                            # print(f"deleting {cname}")
                             cpath = child_prim.GetPrimPath()
                             okc.execute("DeletePrimsCommand", paths=[cpath])
                     self.smf.Clear()
@@ -303,31 +293,20 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
                     self._count = 0
 
                 def on_click_changeprim():
-                    idx = self._prims.index(self._curprim)
-                    idx += 1
+                    idx = self._prims.index(self._curprim) + 1
                     if idx >= len(self._prims):
                         idx = 0
                     self._curprim = self._prims[idx]
                     self._sf_primtospawn_but.text = f"{self._curprim}"
 
                 def UpdateNQuads():
-                    genform = self.get_sf_genform()
-                    nring = 9 if genform == "Classic" else 8
-                    depth = self.sff._depth
-                    nlat = self.smf._nlat
-                    nlng = self.smf._nlng
-                    ntris, nprims = SphereFlakeFactory.CalcTrisAndPrims(depth, nring, nlat, nlng)
+                    ntris, nprims = self.sff.CalcTrisAndPrims()
                     elap = SphereFlakeFactory.GetLastGenTime()
                     self._sf_spawn_but.text = f"Spawn ShereFlake\n tris:{ntris:,} prims:{nprims:,}\ngen: {elap:.2f} s"
 
                 def UpdateMQuads():
-                    genform = self.get_sf_genform()
-                    nring = 9 if genform == "Classic" else 8
-                    depth = self.sff._depth
-                    nlat = self.smf._nlat
-                    nlng = self.smf._nlng
-                    ntris, nprims = SphereFlakeFactory.CalcTrisAndPrims(depth, nring, nlat, nlng)
-                    tottris = ntris*self._nsf_x*self._nsf_z
+                    ntris, nprims = self.sff.CalcTrisAndPrims()
+                    tottris = ntris*self.sff._nsfx*self.sff._nsfz
                     self._msf_spawn_but.text = f"Multi ShereFlake\ntris:{tottris:,} prims:{nprims:,}"
 
                 def UpdateGpuMemory():
@@ -346,26 +325,18 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
 
                 # Material Combo Box
                 idx = self._matkeys.index(self._current_material_name)
-                if idx < 0:
-                    idx = 0
                 self._matbox = ui.ComboBox(idx, *self._matkeys).model
 
                 # Bounds Material Combo Box
                 idx = self._matkeys.index(self._current_bbox_material_name)
-                if idx < 0:
-                    idx = 0
                 self._matbbox = ui.ComboBox(idx, *self._matkeys).model
 
                 # SF Gen Mode Combo Box
                 idx = self._sf_gen_modes.index(self._sf_gen_mode)
-                if idx < 0:
-                    idx = 0
                 self._genmodebox = ui.ComboBox(idx, *self._sf_gen_modes).model
 
                 # SF Form Combo Box
                 idx = self._sf_gen_forms.index(self._sf_gen_form)
-                if idx < 0:
-                    idx = 0
                 self._genformbox = ui.ComboBox(idx, *self._sf_gen_forms).model
                 darkgreen = clr("#004000")
                 darkblue = clr("#000040")
@@ -385,9 +356,9 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
                     self._sf_primtospawn_but = ui.Button(f"{self._curprim}",
                                                          style={'background_color': darkpurple},
                                                          clicked_fn=lambda: on_click_changeprim())
-                    self._tog_bounds = ui.Button("Toggle Bounds",
-                                                 style={'background_color': darkcyan},
-                                                 clicked_fn=lambda: toggle_bounds())
+                    self._tog_bounds_but = ui.Button(f"Bounds:{self._bounds_visible}",
+                                                     style={'background_color': darkcyan},
+                                                     clicked_fn=lambda: toggle_bounds())
 
                 with ui.VStack():
                     with ui.HStack():
@@ -398,12 +369,10 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
                                                        style={'background_color': darkgreen},
                                                        mouse_pressed_fn=lambda x, y, b, m: on_click_sfdepth(x, y, b, m))
                         with ui.VStack():
-                            nlat = self.smf._nlat
-                            self._sf_nlat_but = ui.Button(f"Nlat:{nlat}",
+                            self._sf_nlat_but = ui.Button(f"Nlat:{self.smf._nlat}",
                                                           style={'background_color': darkgreen},
                                                           mouse_pressed_fn=lambda x, y, b, m: on_click_nlat(x, y, b, m))
-                            nlng = self.smf._nlng
-                            self._sf_nlng_but = ui.Button(f"Nlng:{nlng}",
+                            self._sf_nlng_but = ui.Button(f"Nlng:{self.smf._nlng}",
                                                           style={'background_color': darkgreen},
                                                           mouse_pressed_fn=lambda x, y, b, m: on_click_nlng(x, y, b, m))
 
@@ -413,10 +382,10 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
                                                         clicked_fn= # noqa : E251
                                                         lambda: asyncio.ensure_future(on_click_multi_sphereflake()))
                         with ui.VStack():
-                            self._nsf_x_but = ui.Button(f"SF x: {self._nsf_x}",
+                            self._nsf_x_but = ui.Button(f"SF x: {self.sff._nsfx}",
                                                         style={'background_color': darkblue},
                                                         mouse_pressed_fn=lambda x, y, b, m: on_click_sfx(x, y, b, m))
-                            self._nsf_z_but = ui.Button(f"SF z: {self._nsf_z}",
+                            self._nsf_z_but = ui.Button(f"SF z: {self.sff._nsfz}",
                                                         style={'background_color': darkblue},
                                                         mouse_pressed_fn=lambda x, y, b, m: on_click_sfz(x, y, b, m))
                             with ui.HStack():
@@ -425,7 +394,7 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
                                          width=50)
                                 self._sf_radratio_slider = ui.FloatSlider(min=0.0, max=1.0, step=0.01,
                                                                           style={'background_color': darkblue}).model
-                                self._sf_radratio_slider.set_value(self._sf_radratio)
+                                self._sf_radratio_slider.set_value(self.sff._radratio)
                 UpdateNQuads()
                 UpdateMQuads()
 
@@ -435,38 +404,31 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
     def get_curmat_mat(self):
         idx = self._matbox.get_item_value_model().as_int
         self._current_material_name = self._matkeys[idx]
-        rv = self._matman.GetMaterial(self._current_material_name)
-        return rv
+        return self._matman.GetMaterial(self._current_material_name)
 
     def get_curmat_name(self):
         idx = self._matbox.get_item_value_model().as_int
         self._current_material_name = self._matkeys[idx]
-        rv = self._current_material_name
-        return rv
+        return self._current_material_name
 
     def get_curmat_bbox_name(self):
         idx = self._matbbox.get_item_value_model().as_int
         self._current_bbox_material_name = self._matkeys[idx]
-        rv = self._current_bbox_material_name
-        return rv
+        return self._current_bbox_material_name
 
     def get_curmat_bbox_mat(self):
         idx = self._matbbox.get_item_value_model().as_int
         self._current_bbox_material_name = self._matkeys[idx]
-        rv = self._matman.GetMaterial(self._current_bbox_material_name)
-        return rv
+        return self._matman.GetMaterial(self._current_bbox_material_name)
 
     def get_sf_genmode(self):
         idx = self._genmodebox.get_item_value_model().as_int
-        self._sf_genmode = self._sf_gen_modes[idx]
-        rv = self._sf_genmode
-        return rv
+        return self._sf_gen_modes[idx]
 
     def get_sf_genform(self):
         idx = self._genformbox.get_item_value_model().as_int
-        self._sf_genform = self._sf_gen_forms[idx]
-        rv = self._sf_genform
-        return rv
+        return self._sf_gen_forms[idx]
 
     def on_shutdown(self):
-        print("[omni.example.spawn_prims] omni example spawn_prims shutdown")
+        # print("[omni.example.spawn_prims] omni example spawn_prims shutdown")
+        pass
