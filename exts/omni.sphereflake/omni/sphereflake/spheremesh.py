@@ -23,7 +23,7 @@ class SphereMeshFactoryV1():
         pass
 
     def MakeMarker(self, name: str, matname: str, cenpt: Gf.Vec3f, rad: float):
-        print(f"MakeMarker {name}  {cenpt} {rad}")
+        # print(f"MakeMarker {name}  {cenpt} {rad}")
         primpath = f"/World/markers/{name}"
         delete_if_exists(primpath)
         okc.execute('CreateMeshPrimWithDefaultXform', prim_type="Sphere", prim_path=primpath)
@@ -94,7 +94,7 @@ class SphereMeshFactoryV1():
 
                 vtxcnt += 1
 
-        print(len(pts), len(txc), len(fvc), len(idx))
+        # print(len(pts), len(txc), len(fvc), len(idx))
         spheremesh.CreatePointsAttr(pts)
         spheremesh.CreateNormalsAttr(nrm)
         spheremesh.CreateFaceVertexCountsAttr(fvc)
@@ -140,7 +140,7 @@ class SphereMeshFactory():
         pass
 
     def MakeMarker(self, name: str, matname: str, cenpt: Gf.Vec3f, rad: float):
-        print(f"MakeMarker {name}  {cenpt} {rad}")
+        # print(f"MakeMarker {name}  {cenpt} {rad}")
         primpath = f"/World/markers/{name}"
         delete_if_exists(primpath)
         okc.execute('CreateMeshPrimWithDefaultXform', prim_type="Sphere", prim_path=primpath)
