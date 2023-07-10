@@ -1,6 +1,7 @@
 import omni.ext
 from .demo import DemoWindow
 from .sfcontrols import SfControls
+from .sfwindow import SfcWindow
 
 # fflake8: noqa
 
@@ -13,6 +14,7 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
     # this extension is located on filesystem.
     _window_demo = None
     _window_sfcon = None
+    _sfc = None
 
     def on_stage(self, ext_id):
         # print(f"on_stage - stage:{omni.usd.get_context().get_stage()}")
@@ -23,7 +25,8 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
         # print(f"on_startup - stage:{omni.usd.get_context().get_stage()}")
         print("[mc.widgets] MyExtension startup")
         self._window_demo = DemoWindow("Demo Window", width=300, height=300)
-        self._window_sfcon = SfControls("Sphereflake Controls", width=300, height=300)
+        self._sfc = SfControls()
+        self._window_sfcon = SfcWindow("Sphereflake Controls", width=300, height=300, sfc=self._sfc)
 
     def on_shutdown(self):
         # print("[omni.example.spawn_prims] omni example spawn_prims shutdown")

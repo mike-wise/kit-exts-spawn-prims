@@ -25,6 +25,7 @@ class SphereFlakeFactory():
     _createlist: list = []
     _bbcubelist: list = []
     _nsfx = 1
+    _nsfy = 1
     _nsfz = 1
     _sf_matname = "Mirror"
     _bb_matname = "Red Glass"

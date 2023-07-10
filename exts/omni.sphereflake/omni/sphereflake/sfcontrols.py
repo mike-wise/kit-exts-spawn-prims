@@ -1,16 +1,13 @@
 import omni.ext
 import omni.ui as ui
-from omni.ui import color as clr
 import omni.kit.commands as okc
 import omni.usd
 import time
-import asyncio
 from pxr import Gf, Sdf, Usd, UsdGeom, UsdShade
 from .ovut import MatMan, delete_if_exists, write_out_syspath
 from .spheremesh import SphereMeshFactory
 from .sphereflake import SphereFlakeFactory
 import nvidia_smi
-
 
 # fflake8: noqa
 
@@ -18,7 +15,8 @@ import nvidia_smi
 # Any class derived from `omni.ext.IExt` in top level module (defined in `python.modules` of `extension.toml`) will be
 # instantiated when extension gets enabled and `on_startup(ext_id)` will be called. Later when extension gets disabled
 # on_shutdown() is called.
-class SfControls(ui.Window):
+# class SfControls(ui.Window):
+class SfControls():
     # ext_id is current extension id. It can be used with extension manager to query additional information, like where
     # this extension is located on filesystem.
     _stage = None
@@ -29,6 +27,48 @@ class SfControls(ui.Window):
     _bounds_visible = False
     _sf_size = 50
     _vsc_test8 = False
+
+    def __init__(self):
+        print("SfControls __init__")
+
+        self._matman = MatMan()
+        self._count = 0
+        self._current_material_name = "Mirror"
+        self._current_bbox_material_name = "Red_Glass"
+        self._matkeys = self._matman.GetMaterialNames()
+        # self._window = ui.Window("Spawn Primitives", width=300, height=300)
+        self._total_quads = 0
+        self._sf_size = 50
+
+        self._sf_depth_but: ui.Button = None
+        self._sf_spawn_but: ui.Button = None
+        self._sf_nlat_but: ui.Button = None
+        self._sf_nlng_but: ui.Button = None
+        self._sf_radratio_slider: ui.Slider = None
+
+        self._matbox: ui.ComboBox = None
+        self._prims = ["Sphere", "Cube", "Cone", "Torus", "Cylinder", "Plane", "Disk", "Capsule",
+                       "Billboard", "SphereMesh"]
+        self._curprim = self._prims[0]
+        self._sf_gen_modes = SphereFlakeFactory.GetGenModes()
+        self._sf_gen_mode = self._sf_gen_modes[0]
+        self._sf_gen_forms = SphereFlakeFactory.GetGenForms()
+        self._sf_gen_form = self._sf_gen_forms[0]
+        self._genmodebox = ui.ComboBox(0, *self._sf_gen_modes).model
+        self._genformbox = ui.ComboBox(0, *self._sf_gen_forms).model
+
+        idx = self._matkeys.index(self._current_material_name)
+        self._matbox = ui.ComboBox(idx, *self._matkeys).model
+        idx = self._matkeys.index(self._current_bbox_material_name)
+        self._matbbox = ui.ComboBox(idx, *self._matkeys).model
+
+        self.smf = SphereMeshFactory(self._matman)
+        self.sff = SphereFlakeFactory(self._matman, self.smf)
+
+        self._write_out_syspath = False
+
+        if self._write_out_syspath:
+            write_out_syspath()
 
     def setup_environment(self, extent3f: Gf.Vec3f,  force: bool = False):
         ppathstr = "/World/Floor"
@@ -84,42 +124,6 @@ class SfControls(ui.Window):
 # Todo:
 # Remove _sf_size into smf (and sff?)
 
-    def __init__(self,  *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # print("[omni.example.spawn_prims] omni example spawn_prims startup <<<<<<<<<<<<<<<<<")
-        # print(f"on_startup - stage:{omni.usd.get_context().get_stage()}")
-        print("SfControls __init__")
-
-        self._matman = MatMan()
-        self._count = 0
-        self._current_material_name = "Mirror"
-        self._current_bbox_material_name = "Red_Glass"
-        self._matkeys = self._matman.GetMaterialNames()
-        self._window = ui.Window("Spawn Primitives", width=300, height=300)
-        self._total_quads = 0
-        self._sf_size = 50
-
-        self._sf_depth_but: ui.Button = None
-        self._sf_spawn_but: ui.Button = None
-        self._sf_nlat_but: ui.Button = None
-        self._sf_nlng_but: ui.Button = None
-        self._sf_radratio_slider: ui.Slider = None
-
-        self._matbox: ui.ComboBox = None
-        self._prims = ["Sphere", "Cube", "Cone", "Torus", "Cylinder", "Plane", "Disk", "Capsule",
-                       "Billboard", "SphereMesh"]
-        self._curprim = self._prims[0]
-        self._sf_gen_modes = SphereFlakeFactory.GetGenModes()
-        self._sf_gen_mode = self._sf_gen_modes[0]
-        self._sf_gen_forms = SphereFlakeFactory.GetGenForms()
-        self._sf_gen_form = self._sf_gen_forms[0]
-        self._sf_test2 = False
-        self._write_out_syspath = False
-
-        self.smf = SphereMeshFactory(self._matman)
-        self.sff = SphereFlakeFactory(self._matman, self.smf)
-        self.build_fn()
-
     def toggle_bounds(self):
         self.ensure_stage()
         self._bounds_visible = not self._bounds_visible
@@ -155,7 +159,8 @@ class SfControls(ui.Window):
         sff._genmode = self.get_sf_genmode()
         sff._genform = self.get_sf_genform()
         sff._rad = self._sf_size
-        sff._radratio = self._sf_radratio_slider.get_value_as_float()
+        # print(f"slider: {type(self._sf_radratio_slider)}")
+        # sff._radratio = self._sf_radratio_slider.get_value_as_float()
         sff._sf_matname = self.get_curmat_name()
         sff._bb_matname = self.get_curmat_bbox_name()
 
@@ -178,7 +183,8 @@ class SfControls(ui.Window):
         sff._genmode = self.get_sf_genmode()
         sff._genform = self.get_sf_genform()
         sff._rad = self._sf_size
-        sff._radratio = self._sf_radratio_slider.get_value_as_float()
+        # print(f"slider: {type(self._sf_radratio_slider)}")
+        # sff._radratio = self._sf_radratio_slider.get_value_as_float()
         sff._sf_matname = self.get_curmat_name()
 
         sff._make_bounds_visible = self._bounds_visible
@@ -266,6 +272,13 @@ class SfControls(ui.Window):
         self.UpdateMQuads()
         self.UpdateGpuMemory()
 
+    def on_click_sfy(self, x, y, button, modifier):
+        nsfy = self.round_increment(self.sff._nsfx, button == 1, 20, 1)
+        self._nsf_y_but.text = f"SF - y:{nsfy}"
+        self.sff._nsfy = nsfy
+        self.UpdateMQuads()
+        self.UpdateGpuMemory()
+
     def on_click_sfz(self, x, y, button, modifier):
         nsfz = self.round_increment(self.sff._nsfz, button == 1, 20, 1)
         self._nsf_z_but.text = f"SF - z:{nsfz}"
@@ -302,12 +315,14 @@ class SfControls(ui.Window):
     def UpdateNQuads(self):
         ntris, nprims = self.sff.CalcTrisAndPrims()
         elap = SphereFlakeFactory.GetLastGenTime()
-        self._sf_spawn_but.text = f"Spawn ShereFlake\n tris:{ntris:,} prims:{nprims:,}\ngen: {elap:.2f} s"
+        if self._sf_depth_but is not None:
+            self._sf_spawn_but.text = f"Spawn ShereFlake\n tris:{ntris:,} prims:{nprims:,}\ngen: {elap:.2f} s"
 
     def UpdateMQuads(self):
         ntris, nprims = self.sff.CalcTrisAndPrims()
         tottris = ntris*self.sff._nsfx*self.sff._nsfz
-        self._msf_spawn_but.text = f"Multi ShereFlake\ntris:{tottris:,} prims:{nprims:,}"
+        if self._msf_spawn_but is not None:
+            self._msf_spawn_but.text = f"Multi ShereFlake\ntris:{tottris:,} prims:{nprims:,}"
 
     def UpdateGpuMemory(self):
         nvidia_smi.nvmlInit()
@@ -317,93 +332,9 @@ class SfControls(ui.Window):
 
         info = nvidia_smi.nvmlDeviceGetMemoryInfo(handle)
         om = float(1024*1024*1024)
-        msg = f"Mem GB tot:{info.total/om:.2f}: used:{info.used/om:.2f} free:{info.free/om:.2f}"
+        msg = f"GPU Mem tot:  {info.total/om:.2f}: used:  {info.used/om:.2f} free:  {info.free/om:.2f} GB"
+        msg += f"\n Materials fetched: {self._matman.fetchCount} skipped: {self._matman.fetchCount}"
         self._memlabel.text = msg
-
-    def build_fn(self):
-        with self.frame:
-            with ui.VStack():
-
-                if self._write_out_syspath:
-                    write_out_syspath()
-
-                # Material Combo Box
-                idx = self._matkeys.index(self._current_material_name)
-                self._matbox = ui.ComboBox(idx, *self._matkeys).model
-
-                # Bounds Material Combo Box
-                idx = self._matkeys.index(self._current_bbox_material_name)
-                self._matbbox = ui.ComboBox(idx, *self._matkeys).model
-
-                # SF Gen Mode Combo Box
-                idx = self._sf_gen_modes.index(self._sf_gen_mode)
-                self._genmodebox = ui.ComboBox(idx, *self._sf_gen_modes).model
-
-                # SF Form Combo Box
-                idx = self._sf_gen_forms.index(self._sf_gen_form)
-                self._genformbox = ui.ComboBox(idx, *self._sf_gen_forms).model
-                darkgreen = clr("#004000")
-                darkblue = clr("#000040")
-                darkred = clr("#400000")
-                darkyellow = clr("#404000")
-                darkpurple = clr("#400040")
-                darkcyan = clr("#004040")
-
-                ui.Button("Clear Prims",
-                          style={'background_color': darkyellow},
-                          clicked_fn=lambda: self.on_click_clearprims())
-                ui.Button()
-                with ui.HStack():
-                    self._sf_spawn_but = ui.Button("Spawn Prim",
-                                                   style={'background_color': darkred},
-                                                   clicked_fn=lambda: self.on_click_spawnprim())
-                    self._sf_primtospawn_but = ui.Button(f"{self._curprim}",
-                                                         style={'background_color': darkpurple},
-                                                         clicked_fn=lambda: self.on_click_changeprim())
-                    self._tog_bounds_but = ui.Button(f"Bounds:{self._bounds_visible}",
-                                                     style={'background_color': darkcyan},
-                                                     clicked_fn=lambda: self.toggle_bounds())
-
-                with ui.VStack():
-                    with ui.HStack():
-                        self._sf_spawn_but = ui.Button("Spawn SphereFlake",
-                                                       style={'background_color': darkred},
-                                                       clicked_fn=lambda: self.on_click_sphereflake())
-                        self._sf_depth_but = ui.Button(f"Depth:{self.sff._depth}",
-                                                       style={'background_color': darkgreen},
-                                                       mouse_pressed_fn=lambda x, y, b, m: self.on_click_sfdepth(x, y, b, m))
-                        with ui.VStack():
-                            self._sf_nlat_but = ui.Button(f"Nlat:{self.smf._nlat}",
-                                                          style={'background_color': darkgreen},
-                                                          mouse_pressed_fn=lambda x, y, b, m: self.on_click_nlat(x, y, b, m))
-                            self._sf_nlng_but = ui.Button(f"Nlng:{self.smf._nlng}",
-                                                          style={'background_color': darkgreen},
-                                                          mouse_pressed_fn=lambda x, y, b, m: self.on_click_nlng(x, y, b, m))
-
-                    with ui.HStack():
-                        self._msf_spawn_but = ui.Button("Multi ShereFlake",
-                                                        style={'background_color': darkred},
-                                                        clicked_fn= # noqa : E251
-                                                        lambda: asyncio.ensure_future(self.on_click_multi_sphereflake()))
-                        with ui.VStack():
-                            self._nsf_x_but = ui.Button(f"SF x: {self.sff._nsfx}",
-                                                        style={'background_color': darkblue},
-                                                        mouse_pressed_fn=lambda x, y, b, m: self.on_click_sfx(x, y, b, m))
-                            self._nsf_z_but = ui.Button(f"SF z: {self.sff._nsfz}",
-                                                        style={'background_color': darkblue},
-                                                        mouse_pressed_fn=lambda x, y, b, m: self.on_click_sfz(x, y, b, m))
-                            with ui.HStack():
-                                ui.Label("Radius Ratio: ",
-                                         style={'background_color': darkblue},
-                                         width=50)
-                                self._sf_radratio_slider = ui.FloatSlider(min=0.0, max=1.0, step=0.01,
-                                                                          style={'background_color': darkblue}).model
-                                self._sf_radratio_slider.set_value(self.sff._radratio)
-                self.UpdateNQuads()
-                self.UpdateMQuads()
-
-                self._statuslabel = ui.Label("Status: Ready")
-                self._memlabel = ui.Button("Memory tot/used/free", clicked_fn=self.UpdateGpuMemory)
 
     def get_curmat_mat(self):
         idx = self._matbox.get_item_value_model().as_int
@@ -426,9 +357,13 @@ class SfControls(ui.Window):
         return self._matman.GetMaterial(self._current_bbox_material_name)
 
     def get_sf_genmode(self):
+        if not self._genmodebox:
+            return self._sf_gen_modes[0]
         idx = self._genmodebox.get_item_value_model().as_int
         return self._sf_gen_modes[idx]
 
     def get_sf_genform(self):
+        if not self._genformbox:
+            return self._sf_gen_forms[0]
         idx = self._genformbox.get_item_value_model().as_int
         return self._sf_gen_forms[idx]

@@ -2,6 +2,7 @@ import carb
 import omni.ui as ui
 from ._widgets import CheckBoxGroup, CheckBoxGroupModel, TabGroup, BaseTab
 
+
 class DemoWindow(ui.Window):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -21,8 +22,6 @@ class DemoWindow(ui.Window):
                 model.subscribe_group_changed_fn(checkbox_group_changed)
                 tab_group = TabGroup([MyTab1("Tab Header 1"), MyTab2("Tab Header 2"), MyTab3("Tab Header 3"),])
 
-                
-    
     def destroy(self) -> None:
         super().destroy()
         self.cb_group.destroy()
@@ -34,6 +33,7 @@ class MyTab1(BaseTab):
             ui.Label("Hello!", alignment=ui.Alignment.CENTER, height=25)
             ui.Label("Check out this TabGroup Widget.", alignment=ui.Alignment.CENTER)
             ui.Spacer(height=40)
+
 
 class MyTab2(BaseTab):
     def build_fn(self):
