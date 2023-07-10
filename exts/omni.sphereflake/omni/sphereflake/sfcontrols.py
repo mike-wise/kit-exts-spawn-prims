@@ -150,6 +150,11 @@ class SfControls():
         self._count += 1
         self.smf.CreateMesh(primpath, matname, cpt, self._sf_size)
 
+    def update_radratio(self):
+        if self._sf_radratio_slider is not None:
+            val = self._sf_radratio_slider.get_value_as_float()
+            self.sff._radratio = val
+
     def on_click_sphereflake(self):
         self.ensure_stage()
 
@@ -161,6 +166,7 @@ class SfControls():
         sff._rad = self._sf_size
         # print(f"slider: {type(self._sf_radratio_slider)}")
         # sff._radratio = self._sf_radratio_slider.get_value_as_float()
+        self.update_radratio()
         sff._sf_matname = self.get_curmat_name()
         sff._bb_matname = self.get_curmat_bbox_name()
 
@@ -185,6 +191,8 @@ class SfControls():
         sff._rad = self._sf_size
         # print(f"slider: {type(self._sf_radratio_slider)}")
         # sff._radratio = self._sf_radratio_slider.get_value_as_float()
+        self.update_radratio()
+
         sff._sf_matname = self.get_curmat_name()
 
         sff._make_bounds_visible = self._bounds_visible
