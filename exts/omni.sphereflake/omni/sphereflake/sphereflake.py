@@ -81,11 +81,13 @@ class SphereFlakeFactory():
         totquads, totprims = self.CalcQuadsAndPrims()
         return totquads * 2, totprims
 
-    def GetCenterPosition(self, ix: int, nx: int,  iz: int, nz: int,  extentvec: Gf.Vec3f, gap: float = 1.1):
+    def GetCenterPosition(self, ix: int, nx: int, iy: int, ny: int,  iz: int, nz: int,  extentvec: Gf.Vec3f, gap: float = 1.1):
         ixoff = (nx-1)/2
+        iyoff = -0.5
         izoff = (nz-1)/2
         x = (ix-ixoff) * extentvec[0] * gap * 2
-        y = extentvec[1]
+        y = (iy-iyoff) * extentvec[1] * gap * 2
+#         y = extentvec[1]
         z = (iz-izoff) * extentvec[2] * gap * 2
         return Gf.Vec3f(x, y, z)
 
@@ -118,6 +120,7 @@ class SphereFlakeFactory():
         cpt = Gf.Vec3f(0, self.p_rad, 0)
         # extentvec = self.GetFlakeExtent(depth, self._rad, self._radratio)
         nx = self.p_nsfx
+        ny = self.p_nsfy
         nz = self.p_nsfz
         extentvec = self.GetSphereFlakeBoundingBox()
         count = self._count
@@ -125,22 +128,23 @@ class SphereFlakeFactory():
         self._createlist = []
         self._bbcubelist = []
         for ix in range(nx):
-            for iz in range(nz):
-                count += 1
-                primpath = f"/World/SphereFlake_{count}"
+            for iy in range(ny):
+                for iz in range(nz):
+                    count += 1
+                    primpath = f"/World/SphereFlake_{count}"
 
-                cpt = self.GetCenterPosition(ix, nx, iz, nz, extentvec)
+                    cpt = self.GetCenterPosition(ix, nx, iy, ny, iz, nz, extentvec)
 
-                self.Generate(primpath, cpt)
-                self._createlist.append(primpath)
-                bnd_cubepath = primpath+"/bounds"
-                bnd_cube = self.SpawnBBcube(bnd_cubepath, cpt, extentvec, self.p_bb_matname)
-                self._bbcubelist.append(bnd_cubepath)
-                if self.p_make_bounds_visible:
-                    UsdGeom.Imageable(bnd_cube).MakeVisible()
-                else:
-                    UsdGeom.Imageable(bnd_cube).MakeInvisible()
-        return (count)
+                    self.Generate(primpath, cpt)
+                    self._createlist.append(primpath)
+                    bnd_cubepath = primpath+"/bounds"
+                    bnd_cube = self.SpawnBBcube(bnd_cubepath, cpt, extentvec, self.p_bb_matname)
+                    self._bbcubelist.append(bnd_cubepath)
+                    if self.p_make_bounds_visible:
+                        UsdGeom.Imageable(bnd_cube).MakeVisible()
+                    else:
+                        UsdGeom.Imageable(bnd_cube).MakeInvisible()
+        return count
 
     def ToggleBoundsVisiblity(self):
         # print(f"ToggleBoundsVisiblity: {self._bbcubelist}")

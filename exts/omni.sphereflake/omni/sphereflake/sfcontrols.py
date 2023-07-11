@@ -29,7 +29,7 @@ class SfControls():
     _sf_size = 50
     _vsc_test8 = False
     p_sfw = None  # We can't give this a type because it would be a circular reference
-    p_writelog = False
+    p_writelog = True
 
     def __init__(self):
         print("SfControls __init__")

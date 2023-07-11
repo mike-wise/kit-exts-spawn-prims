@@ -216,7 +216,7 @@ class SfcTab5(BaseTab):
         with ui.VStack(style={"margin": sfw.marg}):
 
             # Material Combo Box
-            with ui.HStack():
+            with ui.HStack( width=10, height=10):
                 ui.Label("WriteLog:")
                 ui.CheckBox()
 
