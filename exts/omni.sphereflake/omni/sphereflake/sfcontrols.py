@@ -3,8 +3,10 @@ import omni.ui as ui
 import omni.kit.commands as okc
 import omni.usd
 import time
+import datetime
+import json
 from pxr import Gf, Sdf, Usd, UsdGeom, UsdShade
-from .ovut import MatMan, delete_if_exists, write_out_syspath
+from .ovut import MatMan, delete_if_exists, write_out_syspath, truncf
 from .spheremesh import SphereMeshFactory
 from .sphereflake import SphereFlakeFactory
 import nvidia_smi
@@ -15,7 +17,6 @@ import nvidia_smi
 # Any class derived from `omni.ext.IExt` in top level module (defined in `python.modules` of `extension.toml`) will be
 # instantiated when extension gets enabled and `on_startup(ext_id)` will be called. Later when extension gets disabled
 # on_shutdown() is called.
-# class SfControls(ui.Window):
 class SfControls():
     # ext_id is current extension id. It can be used with extension manager to query additional information, like where
     # this extension is located on filesystem.
@@ -27,6 +28,8 @@ class SfControls():
     _bounds_visible = False
     _sf_size = 50
     _vsc_test8 = False
+    p_sfw = None  # We can't give this a type because it would be a circular reference
+    p_writelog = False
 
     def __init__(self):
         print("SfControls __init__")
@@ -153,7 +156,7 @@ class SfControls():
     def update_radratio(self):
         if self._sf_radratio_slider is not None:
             val = self._sf_radratio_slider.get_value_as_float()
-            self.sff._radratio = val
+            self.sff.p_radratio = val
 
     def on_click_sphereflake(self):
         self.ensure_stage()
@@ -161,14 +164,14 @@ class SfControls():
         start_time = time.time()
 
         sff = self.sff
-        sff._genmode = self.get_sf_genmode()
-        sff._genform = self.get_sf_genform()
-        sff._rad = self._sf_size
+        sff.p_genmode = self.get_sf_genmode()
+        sff.p_genform = self.get_sf_genform()
+        sff.p_rad = self._sf_size
         # print(f"slider: {type(self._sf_radratio_slider)}")
         # sff._radratio = self._sf_radratio_slider.get_value_as_float()
         self.update_radratio()
-        sff._sf_matname = self.get_curmat_name()
-        sff._bb_matname = self.get_curmat_bbox_name()
+        sff.p_sf_matname = self.get_curmat_name()
+        sff.p_bb_matname = self.get_curmat_bbox_name()
 
         cpt = Gf.Vec3f(0, self._sf_size, 0)
         primpath = f"/World/SphereFlake_{self._count}"
@@ -186,17 +189,17 @@ class SfControls():
         sff = self.sff
 
         sff._matman = self._matman
-        sff._genmode = self.get_sf_genmode()
-        sff._genform = self.get_sf_genform()
-        sff._rad = self._sf_size
+        sff.p_genmode = self.get_sf_genmode()
+        sff.p_genform = self.get_sf_genform()
+        sff.p_rad = self._sf_size
         # print(f"slider: {type(self._sf_radratio_slider)}")
         # sff._radratio = self._sf_radratio_slider.get_value_as_float()
         self.update_radratio()
 
-        sff._sf_matname = self.get_curmat_name()
+        sff.p_sf_matname = self.get_curmat_name()
 
-        sff._make_bounds_visible = self._bounds_visible
-        sff._bb_matname = self.get_curmat_bbox_name()
+        sff.p_make_bounds_visible = self._bounds_visible
+        sff.p_bb_matname = self.get_curmat_bbox_name()
 
         new_count = sff.GenerateMany()
 
@@ -211,12 +214,34 @@ class SfControls():
         await self.gensflakes()
         elap = time.time() - start_time
 
-        nflakes = self.sff._nsfx * self.sff._nsfz
+        nflakes = self.sff.p_nsfx * self.sff.p_nsfz
 
         self._statuslabel.text = f"{nflakes} flakes took elapsed: {elap:.2f} s"
 
         self.UpdateNQuads()
         self.UpdateGpuMemory()
+        ntris, nprims = self.sff.CalcTrisAndPrims()
+        gpuinfo = self._gpuinfo
+        om = float(1024*1024*1024)
+        # msg = f"GPU Mem tot:  {gpuinfo.total/om:.2f}: used:  {gpuinfo.used/om:.2f} free:  {gpuinfo.free/om:.2f} GB"
+        if self.WriteRunLog:
+            rundict = {"1-genmode": self.sff.p_genmode,
+                       "1-genform": self.sff.p_genform,
+                       "1-depth": self.sff.p_depth,
+                       "1-rad": self.sff.p_rad,
+                       "1-radratio": self.sff.p_radratio,
+                       "1-nsfx": self.sff.p_nsfx,
+                       "1-nsfy": self.sff.p_nsfy,
+                       "1-nsfz": self.sff.p_nsfz,
+                       "2-tris": ntris,
+                       "2-prims": nprims,
+                       "2-nflakes": nflakes,
+                       "2-elapsed": truncf(elap, 3),
+                       "3-gpu_gbmem_tot": truncf(gpuinfo.total/om, 3),
+                       "3-gpu_gbmem_used": truncf(gpuinfo.used/om, 3),
+                       "3-gpu_gbmem_free": truncf(gpuinfo.free/om, 3),
+                       }
+            self.WriteRunLog(rundict)
 
     def spawnprim(self, primtype):
         self.ensure_stage()
@@ -250,47 +275,47 @@ class SfControls():
         return val
 
     def on_click_sfdepth(self, x, y, button, modifier):
-        depth = self.round_increment(self.sff._depth, button == 1, 5, 0)
+        depth = self.round_increment(self.sff.p_depth, button == 1, 5, 0)
         self._sf_depth_but.text = f"Depth:{depth}"
-        self.sff._depth = depth
+        self.sff.p_depth = depth
         self.UpdateNQuads()
         self.UpdateMQuads()
         self.UpdateGpuMemory()
 
     def on_click_nlat(self, x, y, button, modifier):
-        nlat = self.round_increment(self.smf._nlat, button == 1, 16, 3)
+        nlat = self.round_increment(self.smf.p_nlat, button == 1, 16, 3)
         self._sf_nlat_but.text = f"Nlat:{nlat}"
-        self.smf._nlat = nlat
+        self.smf.p_nlat = nlat
         self.UpdateNQuads()
         self.UpdateMQuads()
         self.UpdateGpuMemory()
 
     def on_click_nlng(self, x, y, button, modifier):
-        nlng = self.round_increment(self.smf._nlng, button == 1, 16, 3)
+        nlng = self.round_increment(self.smf.p_nlng, button == 1, 16, 3)
         self._sf_nlng_but.text = f"Nlng:{nlng}"
-        self.smf._nlng = nlng
+        self.smf.p_nlng = nlng
         self.UpdateNQuads()
         self.UpdateMQuads()
         self.UpdateGpuMemory()
 
     def on_click_sfx(self, x, y, button, modifier):
-        nsfx = self.round_increment(self.sff._nsfx, button == 1, 20, 1)
+        nsfx = self.round_increment(self.sff.p_nsfx, button == 1, 20, 1)
         self._nsf_x_but.text = f"SF - x:{nsfx}"
-        self.sff._nsfx = nsfx
+        self.sff.p_nsfx = nsfx
         self.UpdateMQuads()
         self.UpdateGpuMemory()
 
     def on_click_sfy(self, x, y, button, modifier):
-        nsfy = self.round_increment(self.sff._nsfx, button == 1, 20, 1)
+        nsfy = self.round_increment(self.sff.p_nsfy, button == 1, 20, 1)
         self._nsf_y_but.text = f"SF - y:{nsfy}"
-        self.sff._nsfy = nsfy
+        self.sff.p_nsfy = nsfy
         self.UpdateMQuads()
         self.UpdateGpuMemory()
 
     def on_click_sfz(self, x, y, button, modifier):
-        nsfz = self.round_increment(self.sff._nsfz, button == 1, 20, 1)
+        nsfz = self.round_increment(self.sff.p_nsfz, button == 1, 20, 1)
         self._nsf_z_but.text = f"SF - z:{nsfz}"
-        self.sff._nsfz = nsfz
+        self.sff.p_nsfz = nsfz
         self.UpdateMQuads()
         self.UpdateGpuMemory()
 
@@ -328,7 +353,7 @@ class SfControls():
 
     def UpdateMQuads(self):
         ntris, nprims = self.sff.CalcTrisAndPrims()
-        tottris = ntris*self.sff._nsfx*self.sff._nsfz
+        tottris = ntris*self.sff.p_nsfx*self.sff.p_nsfz
         if self._msf_spawn_but is not None:
             self._msf_spawn_but.text = f"Multi ShereFlake\ntris:{tottris:,} prims:{nprims:,}"
 
@@ -338,10 +363,14 @@ class SfControls():
         handle = nvidia_smi.nvmlDeviceGetHandleByIndex(0)
         # card id 0 hardcoded here, there is also a call to get all available card ids, so we could iterate
 
-        info = nvidia_smi.nvmlDeviceGetMemoryInfo(handle)
+        gpuinfo = nvidia_smi.nvmlDeviceGetMemoryInfo(handle)
+        self._gpuinfo = gpuinfo
         om = float(1024*1024*1024)
-        msg = f"GPU Mem tot:  {info.total/om:.2f}: used:  {info.used/om:.2f} free:  {info.free/om:.2f} GB"
-        msg += f"\n Materials fetched: {self._matman.fetchCount} skipped: {self._matman.fetchCount}"
+        msg = f"GPU Mem tot:  {gpuinfo.total/om:.2f}: used:  {gpuinfo.used/om:.2f} free:  {gpuinfo.free/om:.2f} GB"
+        refcnt = self._matman.fetchCount
+        ftccnt = self._matman.fetchCount
+        skpcnt = self._matman.skipCount
+        msg += f"\n Materials ref:{refcnt} fetched: {ftccnt} skipped: {skpcnt}"
         self._memlabel.text = msg
 
     def get_curmat_mat(self):
@@ -375,3 +404,17 @@ class SfControls():
             return self._sf_gen_forms[0]
         idx = self._genformbox.get_item_value_model().as_int
         return self._sf_gen_forms[idx]
+
+    def WriteRunLog(self, rundict=None):
+
+        if rundict is None:
+            rundict = {}
+        rundict["0-date"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        jline = json.dumps(rundict, sort_keys=True)
+
+        fname = "d:/nv/ov/log.txt"
+        with open(fname, "a") as f:
+            f.write(f"{jline}\n")
+
+        print("wrote log")

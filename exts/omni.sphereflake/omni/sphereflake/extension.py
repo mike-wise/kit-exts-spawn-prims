@@ -23,16 +23,14 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
     def on_startup(self, ext_id):
         # print("[omni.example.spawn_prims] omni example spawn_prims startup <<<<<<<<<<<<<<<<<")
         # print(f"on_startup - stage:{omni.usd.get_context().get_stage()}")
-        print("[mc.widgets] MyExtension startup")
-        self._window_demo = DemoWindow("Demo Window", width=300, height=300)
+        # self._window_demo = DemoWindow("Demo Window", width=300, height=300)
         self._sfc = SfControls()
         self._window_sfcon = SfcWindow("Sphereflake Controls", width=300, height=300, sfc=self._sfc)
 
     def on_shutdown(self):
         # print("[omni.example.spawn_prims] omni example spawn_prims shutdown")
-        print("[mc.widgets] MyExtension shutdown")
-        self._window_demo.destroy()
-        self._window_demo = None
+        # self._window_demo.destroy()
+        # self._window_demo = None
         self._window_sfcon.destroy()
         self._window_sfcon = None
         pass

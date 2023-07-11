@@ -16,25 +16,25 @@ class SphereFlakeFactory():
 
     _matman: MatMan = None
     _smf: SphereMeshFactory = None
-    _genmode = "UsdSphere"
-    _genform = "Classic"
-    _depth = 1
-    _rad = 50
-    _radratio = 0.3
-    _start_timee = 0
+    p_genmode = "UsdSphere"
+    p_genform = "Classic"
+    p_depth = 1
+    p_rad = 50
+    p_radratio = 0.3
+    p_nsfx = 1
+    p_nsfy = 1
+    p_nsfz = 1
+    p_sf_matname = "Mirror"
+    p_bb_matname = "Red Glass"
+    p_make_bounds_visible = False
+    _start_time = 0
     _createlist: list = []
     _bbcubelist: list = []
-    _nsfx = 1
-    _nsfy = 1
-    _nsfz = 1
-    _sf_matname = "Mirror"
-    _bb_matname = "Red Glass"
-    _make_bounds_visible = False
 
-    org = Gf.Vec3f(0, 0, 0)
-    xax = Gf.Vec3f(1, 0, 0)
-    yax = Gf.Vec3f(0, 1, 0)
-    zax = Gf.Vec3f(0, 0, 1)
+    _org = Gf.Vec3f(0, 0, 0)
+    _xax = Gf.Vec3f(1, 0, 0)
+    _yax = Gf.Vec3f(0, 1, 0)
+    _zax = Gf.Vec3f(0, 0, 1)
 
     def __init__(self, matman: MatMan, smf: SphereMeshFactory) -> None:
         self._stage = omni.usd.get_context().get_stage()
@@ -65,12 +65,12 @@ class SphereFlakeFactory():
             carb.log.error(f"SphereFlakeFactory.Set: no attribute {attname}")
 
     def CalcQuadsAndPrims(self):
-        nring = 9 if self._genform == "Classic" else 8
-        nlat = self._smf._nlat
-        nlng = self._smf._nlng
+        nring = 9 if self.p_genform == "Classic" else 8
+        nlat = self._smf.p_nlat
+        nlng = self._smf.p_nlng
         totquads = 0
         totprims = 0
-        for i in range(self._depth+1):
+        for i in range(self.p_depth+1):
             nspheres = nring**(i)
             nquads = nspheres * nlat * nlng
             totquads += nquads
@@ -106,19 +106,19 @@ class SphereFlakeFactory():
 
     def GetSphereFlakeBoundingBox(self):
         # sz = rad  +  (1+(radratio))**depth # old method
-        sz = self._rad
+        sz = self.p_rad
         nrad = sz
-        for i in range(self._depth):
-            nrad = self._radratio*nrad
+        for i in range(self.p_depth):
+            nrad = self.p_radratio*nrad
             sz += 2*nrad
         return Gf.Vec3f(sz, sz, sz)
 
     def GenerateMany(self):
         self.GenPrep()
-        cpt = Gf.Vec3f(0, self._rad, 0)
+        cpt = Gf.Vec3f(0, self.p_rad, 0)
         # extentvec = self.GetFlakeExtent(depth, self._rad, self._radratio)
-        nx = self._nsfx
-        nz = self._nsfz
+        nx = self.p_nsfx
+        nz = self.p_nsfz
         extentvec = self.GetSphereFlakeBoundingBox()
         count = self._count
 
@@ -134,9 +134,9 @@ class SphereFlakeFactory():
                 self.Generate(primpath, cpt)
                 self._createlist.append(primpath)
                 bnd_cubepath = primpath+"/bounds"
-                bnd_cube = self.SpawnBBcube(bnd_cubepath, cpt, extentvec, self._bb_matname)
+                bnd_cube = self.SpawnBBcube(bnd_cubepath, cpt, extentvec, self.p_bb_matname)
                 self._bbcubelist.append(bnd_cubepath)
-                if self._make_bounds_visible:
+                if self.p_make_bounds_visible:
                     UsdGeom.Imageable(bnd_cube).MakeVisible()
                 else:
                     UsdGeom.Imageable(bnd_cube).MakeInvisible()
@@ -150,7 +150,7 @@ class SphereFlakeFactory():
 
         global latest_sf_gen_time
 
-        self._start_timee = time.time()
+        self._start_time = time.time()
         self._total_quads = 0
 
         self._nring = 8
@@ -160,12 +160,12 @@ class SphereFlakeFactory():
         UsdGeom.XformCommonAPI(xformPrim).SetTranslate((0, 0, 0))
         UsdGeom.XformCommonAPI(xformPrim).SetRotate((0, 0, 0))
 
-        mxdepth = self._depth
+        mxdepth = self.p_depth
         basept = cenpt
-        matname = self._sf_matname
-        self.GenRecursively(sphflkname, matname, mxdepth, self._depth, basept, cenpt, self._rad)
+        matname = self.p_sf_matname
+        self.GenRecursively(sphflkname, matname, mxdepth, self.p_depth, basept, cenpt, self.p_rad)
 
-        elap = time.time() - self._start_timee
+        elap = time.time() - self._start_time
         # print(f"GenerateSF {sphflkname} {matname} {depth} {cenpt} totquads:{self._total_quads} in {elap:.3f} secs")
 
         latest_sf_gen_time = elap
@@ -181,13 +181,13 @@ class SphereFlakeFactory():
 
         # spheremesh = UsdGeom.Mesh.Define(self._stage, meshname)
 
-        if self._genmode == "AsyncMesh":
+        if self.p_genmode == "AsyncMesh":
             meshname = sphflkname + "/SphereMeshAsync"
             asyncio.ensure_future(self._smf.CreateMeshAsync(meshname, matname, cenpt,  rad))
-        elif self._genmode == "DirectMesh":
+        elif self.p_genmode == "DirectMesh":
             meshname = sphflkname + "/SphereMesh"
             self._smf.CreateMesh(meshname, matname, cenpt,  rad)
-        elif self._genmode == "OmniSphere":
+        elif self.p_genmode == "OmniSphere":
             meshname = sphflkname + "/OmniSphere"
             okc.execute('CreateMeshPrimWithDefaultXform',	prim_type="Sphere", prim_path=meshname)
             sz = rad/50  # 50 is the default radius of the sphere prim
@@ -199,7 +199,7 @@ class SphereFlakeFactory():
             mtl = self._matman.GetMaterial(matname)
             prim: Usd.Prim = self._stage.GetPrimAtPath(meshname)
             UsdShade.MaterialBindingAPI(prim).Bind(mtl)
-        elif self._genmode == "UsdSphere":
+        elif self.p_genmode == "UsdSphere":
             meshname = sphflkname + "/UsdSphere"
             xformPrim = UsdGeom.Xform.Define(self._stage, meshname)
             sz = rad
@@ -210,7 +210,7 @@ class SphereFlakeFactory():
             UsdShade.MaterialBindingAPI(spheremesh).Bind(mtl)
 
         if depth > 0:
-            form = self._genform
+            form = self.p_genform
             if form == "Classic":
                 thoff = 0
                 phioff = -20*math.pi/180
@@ -234,20 +234,20 @@ class SphereFlakeFactory():
         offvek = cenpt - basept
         len = offvek.GetLength()
         if len > 0:
-            lxax = ovut.cross_product(offvek, self.yax)
+            lxax = ovut.cross_product(offvek, self._yax)
             if lxax.GetLength() == 0:
-                lxax = ovut.cross_product(offvek, self.zax)
+                lxax = ovut.cross_product(offvek, self._zax)
             lxax.Normalize()
             lzax = ovut.cross_product(offvek, lxax)
             lzax.Normalize()
             lyax = offvek
             lyax.Normalize()
         else:
-            lxax = self.xax
-            lyax = self.yax
-            lzax = self.zax
-        nrad = rad * self._radratio
-        offfak = 1 + self._radratio
+            lxax = self._xax
+            lyax = self._yax
+            lzax = self._zax
+        nrad = rad * self.p_radratio
+        offfak = 1 + self.p_radratio
         sphi = math.sin(phioff)
         cphi = math.cos(phioff)
         for i in range(nring):

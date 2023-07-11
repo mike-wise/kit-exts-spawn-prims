@@ -3,9 +3,19 @@ import omni.kit.commands as okc
 import omni.usd
 import os
 import sys
+import math
 
 from pxr import Gf, Sdf, UsdShade
 from typing import Tuple, List
+
+
+def truncf(number, digits) -> float:
+    # Improve accuracy with floating point operations, to avoid truncate(16.4, 2) = 16.39 or truncate(-1.13, 2) = -1.12
+    nbDecimals = len(str(number).split('.')[1])
+    if nbDecimals <= digits:
+        return number
+    stepper = 10.0 ** digits
+    return math.trunc(stepper * number) / stepper
 
 
 def delete_if_exists(primpath: str) -> None:
@@ -101,6 +111,7 @@ class MatMan():
         self.matlib[matname]["mat"] = mtl
         return mtl
 
+    refCount: int = 0
     fetchCount: int = 0
     skipCount: int = 0
 
@@ -128,6 +139,7 @@ class MatMan():
     def RealizeMaterial(self, matname: str):
         typ = self.matlib[matname]["typ"]
         spec = self.matlib[matname]["spec"]
+        self.refCount += 1
         if typ == "mtl":
             self.CopyRemoteMaterial(matname, spec)
         elif typ == "tex":

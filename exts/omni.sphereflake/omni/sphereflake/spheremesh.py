@@ -118,8 +118,8 @@ class SphereMeshFactory():
 
     _show_normals = False
     _matman: MatMan = None
-    _nlat = 8
-    _nlng = 8
+    p_nlat = 8
+    p_nlng = 8
     _total_quads = 0
     _dotexcoords = True
 
@@ -128,8 +128,8 @@ class SphereMeshFactory():
         self._stage = omni.usd.get_context().get_stage()
 
     def GenPrep(self):
-        self._nquads = self._nlat*self._nlng
-        self._nverts = (self._nlat+1)*(self._nlng)
+        self._nquads = self.p_nlat*self.p_nlng
+        self._nverts = (self.p_nlat+1)*(self.p_nlng)
         self._normbuf = np.zeros((self._nverts, 3), dtype=np.float32)
         self._txtrbuf = np.zeros((self._nverts, 2), dtype=np.float32)
         self._facebuf = np.zeros((self._nquads, 1), dtype=np.int32)
@@ -155,8 +155,8 @@ class SphereMeshFactory():
         UsdShade.MaterialBindingAPI(prim).Bind(mtl)
 
     def MakeArrays(self):
-        nlat = self._nlat
-        nlong = self._nlng
+        nlat = self.p_nlat
+        nlong = self.p_nlng
         for i in range(nlat):
             offset = i * nlong
             for j in range(nlong):
@@ -193,8 +193,8 @@ class SphereMeshFactory():
         #  print("MakeArrays done")
 
     def ShowNormals(self, vertbuf):
-        nlat = self._nlat
-        nlong = self._nlng
+        nlat = self.p_nlat
+        nlong = self.p_nlng
         for i in range(nlat+1):
             for j in range(nlong):
                 vidx = i*nlong+j
