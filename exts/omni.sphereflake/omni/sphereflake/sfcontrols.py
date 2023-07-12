@@ -28,13 +28,13 @@ class SfControls():
     _bounds_visible = False
     _sf_size = 50
     _vsc_test8 = False
-    p_sfw = None  # We can't give this a type because it would be a circular reference
+    sfw = None  # We can't give this a type because it would be a circular reference
     p_writelog = True
 
-    def __init__(self):
+    def __init__(self, matman: MatMan, smf: SphereMeshFactory, sff: SphereFlakeFactory):
         print("SfControls __init__")
 
-        self._matman = MatMan()
+        self._matman = matman
         self._count = 0
         self._current_material_name = "Mirror"
         self._current_bbox_material_name = "Red_Glass"
@@ -42,12 +42,6 @@ class SfControls():
         # self._window = ui.Window("Spawn Primitives", width=300, height=300)
         self._total_quads = 0
         self._sf_size = 50
-
-        self._sf_depth_but: ui.Button = None
-        self._sf_spawn_but: ui.Button = None
-        self._sf_nlat_but: ui.Button = None
-        self._sf_nlng_but: ui.Button = None
-        self._sf_radratio_slider: ui.Slider = None
 
         self._matbox: ui.ComboBox = None
         self._prims = ["Sphere", "Cube", "Cone", "Torus", "Cylinder", "Plane", "Disk", "Capsule",
@@ -65,8 +59,8 @@ class SfControls():
         idx = self._matkeys.index(self._current_bbox_material_name)
         self._matbbox = ui.ComboBox(idx, *self._matkeys).model
 
-        self.smf = SphereMeshFactory(self._matman)
-        self.sff = SphereFlakeFactory(self._matman, self.smf)
+        self.smf = smf
+        self.sff = sff
 
         self._write_out_syspath = False
 
@@ -130,7 +124,7 @@ class SfControls():
     def toggle_bounds(self):
         self.ensure_stage()
         self._bounds_visible = not self._bounds_visible
-        self._tog_bounds_but.text = f"Bounds:{self._bounds_visible}"
+        self.sfw._tog_bounds_but.text = f"Bounds:{self._bounds_visible}"
         self.sff.ToggleBoundsVisiblity()
 
     def on_click_billboard(self):
@@ -154,8 +148,8 @@ class SfControls():
         self.smf.CreateMesh(primpath, matname, cpt, self._sf_size)
 
     def update_radratio(self):
-        if self._sf_radratio_slider is not None:
-            val = self._sf_radratio_slider.get_value_as_float()
+        if self.sfw._sf_radratio_slider is not None:
+            val = self.sfw._sf_radratio_slider.get_value_as_float()
             self.sff.p_radratio = val
 
     def on_click_sphereflake(self):
@@ -180,7 +174,7 @@ class SfControls():
         sff.Generate(primpath, cpt)
 
         elap = time.time() - start_time
-        self._statuslabel.text = f"SphereFlake took elapsed: {elap:.2f} s"
+        self.sfw._statuslabel.text = f"SphereFlake took elapsed: {elap:.2f} s"
         self.UpdateNQuads()
         self.UpdateGpuMemory()
 
@@ -216,7 +210,7 @@ class SfControls():
 
         nflakes = self.sff.p_nsfx * self.sff.p_nsfz
 
-        self._statuslabel.text = f"{nflakes} flakes took elapsed: {elap:.2f} s"
+        self.sfw._statuslabel.text = f"{nflakes} flakes took elapsed: {elap:.2f} s"
 
         self.UpdateNQuads()
         self.UpdateGpuMemory()
@@ -276,7 +270,7 @@ class SfControls():
 
     def on_click_sfdepth(self, x, y, button, modifier):
         depth = self.round_increment(self.sff.p_depth, button == 1, 5, 0)
-        self._sf_depth_but.text = f"Depth:{depth}"
+        self.sfw._sf_depth_but.text = f"Depth:{depth}"
         self.sff.p_depth = depth
         self.UpdateNQuads()
         self.UpdateMQuads()
@@ -300,21 +294,21 @@ class SfControls():
 
     def on_click_sfx(self, x, y, button, modifier):
         nsfx = self.round_increment(self.sff.p_nsfx, button == 1, 20, 1)
-        self._nsf_x_but.text = f"SF - x:{nsfx}"
+        self.sfw._nsf_x_but.text = f"SF - x:{nsfx}"
         self.sff.p_nsfx = nsfx
         self.UpdateMQuads()
         self.UpdateGpuMemory()
 
     def on_click_sfy(self, x, y, button, modifier):
         nsfy = self.round_increment(self.sff.p_nsfy, button == 1, 20, 1)
-        self._nsf_y_but.text = f"SF - y:{nsfy}"
+        self.sfw._nsf_y_but.text = f"SF - y:{nsfy}"
         self.sff.p_nsfy = nsfy
         self.UpdateMQuads()
         self.UpdateGpuMemory()
 
     def on_click_sfz(self, x, y, button, modifier):
         nsfz = self.round_increment(self.sff.p_nsfz, button == 1, 20, 1)
-        self._nsf_z_but.text = f"SF - z:{nsfz}"
+        self.sfw._nsf_z_but.text = f"SF - z:{nsfz}"
         self.sff.p_nsfz = nsfz
         self.UpdateMQuads()
         self.UpdateGpuMemory()
@@ -343,19 +337,19 @@ class SfControls():
         if idx >= len(self._prims):
             idx = 0
         self._curprim = self._prims[idx]
-        self._sf_primtospawn_but.text = f"{self._curprim}"
+        self.sfw._sf_primtospawn_but.text = f"{self._curprim}"
 
     def UpdateNQuads(self):
         ntris, nprims = self.sff.CalcTrisAndPrims()
         elap = SphereFlakeFactory.GetLastGenTime()
-        if self._sf_depth_but is not None:
-            self._sf_spawn_but.text = f"Spawn ShereFlake\n tris:{ntris:,} prims:{nprims:,}\ngen: {elap:.2f} s"
+        if self.sfw._sf_depth_but is not None:
+            self.sfw._sf_spawn_but.text = f"Spawn ShereFlake\n tris:{ntris:,} prims:{nprims:,}\ngen: {elap:.2f} s"
 
     def UpdateMQuads(self):
         ntris, nprims = self.sff.CalcTrisAndPrims()
         tottris = ntris*self.sff.p_nsfx*self.sff.p_nsfz
-        if self._msf_spawn_but is not None:
-            self._msf_spawn_but.text = f"Multi ShereFlake\ntris:{tottris:,} prims:{nprims:,}"
+        if self.sfw._msf_spawn_but is not None:
+            self.sfw._msf_spawn_but.text = f"Multi ShereFlake\ntris:{tottris:,} prims:{nprims:,}"
 
     def UpdateGpuMemory(self):
         nvidia_smi.nvmlInit()
@@ -371,7 +365,7 @@ class SfControls():
         ftccnt = self._matman.fetchCount
         skpcnt = self._matman.skipCount
         msg += f"\n Materials ref:{refcnt} fetched: {ftccnt} skipped: {skpcnt}"
-        self._memlabel.text = msg
+        self.sfw._memlabel.text = msg
 
     def get_curmat_mat(self):
         idx = self._matbox.get_item_value_model().as_int
