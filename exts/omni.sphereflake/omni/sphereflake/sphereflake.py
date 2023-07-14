@@ -83,7 +83,7 @@ class SphereFlakeFactory():
 
     def GetCenterPosition(self, ix: int, nx: int, iy: int, ny: int,  iz: int, nz: int,  extentvec: Gf.Vec3f, gap: float = 1.1):
         ixoff = (nx-1)/2
-        iyoff = -0.5
+        iyoff = -0.28  # wierd offset to make it have the same height as single sphereflake
         izoff = (nz-1)/2
         x = (ix-ixoff) * extentvec[0] * gap * 2
         y = (iy-iyoff) * extentvec[1] * gap * 2
@@ -131,7 +131,8 @@ class SphereFlakeFactory():
             for iy in range(ny):
                 for iz in range(nz):
                     count += 1
-                    primpath = f"/World/SphereFlake_{count}"
+                    # primpath = f"/World/SphereFlake_{count}"
+                    primpath = f"/World/SphereFlake_{ix}_{iy}_{iz}__{nx}_{ny}_{nz}"
 
                     cpt = self.GetCenterPosition(ix, nx, iy, ny, iz, nz, extentvec)
 

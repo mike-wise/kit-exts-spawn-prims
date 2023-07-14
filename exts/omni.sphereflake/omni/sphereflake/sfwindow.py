@@ -25,6 +25,10 @@ class SfcWindow(ui.Window):
     _sf_radratio_slider: ui.FloatSlider = None
     _statuslabel: ui.Label = None
     _memlabel: ui.Label = None
+    _sf_matbox: ui.ComboBox = None
+    _bb_matbox: ui.ComboBox = None
+    _genmodebox: ui.ComboBox = None
+    _genformbox: ui.ComboBox = None
 
     sfc: SfControls
     smf: SphereMeshFactory
@@ -208,13 +212,14 @@ class SfcTab4(BaseTab):
             with ui.HStack():
                 ui.Label("Material:")
                 idx = sfc._matkeys.index(sfc._current_material_name)
-                sfc._matbox = ui.ComboBox(idx, *sfc._matkeys).model
+                sfw._sf_matbox = ui.ComboBox(idx, *sfc._matkeys).model
+                print("built sfw._sf_matbox")
 
             # Bounds Material Combo Box
             with ui.HStack():
                 ui.Label("Bounds Material:")
                 idx = sfc._matkeys.index(sfc._current_bbox_material_name)
-                sfc._matbbox = ui.ComboBox(idx, *sfc._matkeys).model
+                sfw._bb_matbox = ui.ComboBox(idx, *sfc._matkeys).model
 
 
 class SfcTab5(BaseTab):
@@ -232,8 +237,9 @@ class SfcTab5(BaseTab):
         sfc = self.sfc # noqa : F841
 
         with ui.VStack(style={"margin": sfw.marg}):
+            ui.CheckBox(model=sfc.get_bool_model("writelog"), width=40, height=10, name="writelog", visible=True)
 
-            # Material Combo Box
-            with ui.HStack(width=10, height=10):
-                ui.Label("WriteLog:")
-                ui.CheckBox()
+            with ui.CollapsableFrame("Logging", style={'background_color': sfw.darkcyan}):
+                with ui.HStack():
+                    sfw._sf_writerunlog_but = ui.Button(f"Write Perf Log: {sfc.p_writelog}",
+                                                        clicked_fn=lambda: sfc.on_click_writerunlog())

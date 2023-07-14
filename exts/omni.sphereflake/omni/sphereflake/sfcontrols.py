@@ -1,5 +1,5 @@
 import omni.ext
-import omni.ui as ui
+# import omni.ui as ui
 import omni.kit.commands as okc
 import omni.usd
 import time
@@ -39,11 +39,10 @@ class SfControls():
         self._current_material_name = "Mirror"
         self._current_bbox_material_name = "Red_Glass"
         self._matkeys = self._matman.GetMaterialNames()
-        # self._window = ui.Window("Spawn Primitives", width=300, height=300)
         self._total_quads = 0
         self._sf_size = 50
 
-        self._matbox: ui.ComboBox = None
+        # self._sf_matbox: ui.ComboBox = None
         self._prims = ["Sphere", "Cube", "Cone", "Torus", "Cylinder", "Plane", "Disk", "Capsule",
                        "Billboard", "SphereMesh"]
         self._curprim = self._prims[0]
@@ -51,13 +50,8 @@ class SfControls():
         self._sf_gen_mode = self._sf_gen_modes[0]
         self._sf_gen_forms = SphereFlakeFactory.GetGenForms()
         self._sf_gen_form = self._sf_gen_forms[0]
-        self._genmodebox = ui.ComboBox(0, *self._sf_gen_modes).model
-        self._genformbox = ui.ComboBox(0, *self._sf_gen_forms).model
-
-        idx = self._matkeys.index(self._current_material_name)
-        self._matbox = ui.ComboBox(idx, *self._matkeys).model
-        idx = self._matkeys.index(self._current_bbox_material_name)
-        self._matbbox = ui.ComboBox(idx, *self._matkeys).model
+        # self._genmodebox = ui.ComboBox(0, *self._sf_gen_modes).model
+        # self._genformbox = ui.ComboBox(0, *self._sf_gen_forms).model
 
         self.smf = smf
         self.sff = sff
@@ -121,6 +115,14 @@ class SfControls():
 # Todo:
 # Remove _sf_size into smf (and sff?)
 
+    # def get_bool_model(self, option_name: str):
+    #     bool_model = ui.SimpleBoolModel()
+    #     return bool_model
+
+    def toggle_write_log(self):
+        self.p_writelog = not self.p_writelog
+        print(f"toggle_write_log is now:{self.p_writelog}")
+
     def toggle_bounds(self):
         self.ensure_stage()
         self._bounds_visible = not self._bounds_visible
@@ -178,7 +180,7 @@ class SfControls():
         self.UpdateNQuads()
         self.UpdateGpuMemory()
 
-    async def gensflakes(self):
+    async def generate_sflakes(self):
 
         sff = self.sff
 
@@ -205,7 +207,7 @@ class SfControls():
         self.setup_environment(extent3f, force=True)
 
         start_time = time.time()
-        await self.gensflakes()
+        await self.generate_sflakes()
         elap = time.time() - start_time
 
         nflakes = self.sff.p_nsfx * self.sff.p_nsfz
@@ -218,7 +220,7 @@ class SfControls():
         gpuinfo = self._gpuinfo
         om = float(1024*1024*1024)
         # msg = f"GPU Mem tot:  {gpuinfo.total/om:.2f}: used:  {gpuinfo.used/om:.2f} free:  {gpuinfo.free/om:.2f} GB"
-        if self.WriteRunLog:
+        if self.p_writelog:
             rundict = {"1-genmode": self.sff.p_genmode,
                        "1-genform": self.sff.p_genform,
                        "1-depth": self.sff.p_depth,
@@ -258,6 +260,10 @@ class SfControls():
                     new_translations=[0, 50, 0])
         prim: Usd.Prim = self._stage.GetPrimAtPath(primpath)
         UsdShade.MaterialBindingAPI(prim).Bind(material)
+
+    def on_click_writerunlog(self):
+        self.p_writelog = not self.p_writelog
+        self.sfw._sf_writerunlog_but.text = f"Write Perf Log: {self.p_writelog}"
 
     def round_increment(self, val: int, butval: bool, maxval: int, minval: int = 0):
         inc = 1 if butval else -1
@@ -368,35 +374,39 @@ class SfControls():
         self.sfw._memlabel.text = msg
 
     def get_curmat_mat(self):
-        idx = self._matbox.get_item_value_model().as_int
-        self._current_material_name = self._matkeys[idx]
+        if self.sfw._sf_matbox is not None:
+            idx = self.sfw._sf_matbox.get_item_value_model().as_int
+            self._current_material_name = self._matkeys[idx]
         return self._matman.GetMaterial(self._current_material_name)
 
     def get_curmat_name(self):
-        idx = self._matbox.get_item_value_model().as_int
-        self._current_material_name = self._matkeys[idx]
+        if self.sfw._sf_matbox is not None:
+            idx = self.sfw._sf_matbox.get_item_value_model().as_int
+            self._current_material_name = self._matkeys[idx]
         return self._current_material_name
 
     def get_curmat_bbox_name(self):
-        idx = self._matbbox.get_item_value_model().as_int
-        self._current_bbox_material_name = self._matkeys[idx]
+        if self.sfw._bb_matbox is not None:
+            idx = self.sfw._bb_matbox.get_item_value_model().as_int
+            self._current_bbox_material_name = self._matkeys[idx]
         return self._current_bbox_material_name
 
     def get_curmat_bbox_mat(self):
-        idx = self._matbbox.get_item_value_model().as_int
-        self._current_bbox_material_name = self._matkeys[idx]
+        if self.sfw._bb_matbox is not None:
+            idx = self.sfw._bb_matbox.get_item_value_model().as_int
+            self._current_bbox_material_name = self._matkeys[idx]
         return self._matman.GetMaterial(self._current_bbox_material_name)
 
     def get_sf_genmode(self):
-        if not self._genmodebox:
+        if self.sfw._genmodebox is None:
             return self._sf_gen_modes[0]
-        idx = self._genmodebox.get_item_value_model().as_int
+        idx = self.sfw._genmodebox.get_item_value_model().as_int
         return self._sf_gen_modes[idx]
 
     def get_sf_genform(self):
-        if not self._genformbox:
+        if self.sfw._genformbox is None:
             return self._sf_gen_forms[0]
-        idx = self._genformbox.get_item_value_model().as_int
+        idx = self.sfw._genformbox.get_item_value_model().as_int
         return self._sf_gen_forms[idx]
 
     def WriteRunLog(self, rundict=None):
