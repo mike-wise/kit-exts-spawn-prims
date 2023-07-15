@@ -45,7 +45,7 @@ class SphereFlakeFactory():
     _zax = Gf.Vec3f(0, 0, 1)
 
     def __init__(self, matman: MatMan, smf: SphereMeshFactory) -> None:
-        self._stage = omni.usd.get_context().get_stage()
+        # self._stage = omni.usd.get_context().get_stage()
         self._count = 0
         self._matman = matman
         self._smf = smf
@@ -183,7 +183,8 @@ class SphereFlakeFactory():
         self._nring = 8
         ovut.delete_if_exists(sphflkname)
 
-        xformPrim = UsdGeom.Xform.Define(self._stage, sphflkname)
+        stage = omni.usd.get_context().get_stage()
+        xformPrim = UsdGeom.Xform.Define(stage, sphflkname)
         UsdGeom.XformCommonAPI(xformPrim).SetTranslate((0, 0, 0))
         UsdGeom.XformCommonAPI(xformPrim).SetRotate((0, 0, 0))
 
@@ -224,15 +225,17 @@ class SphereFlakeFactory():
                         new_scales=[sz, sz, sz],
                         new_translations=[cenpt[0], cenpt[1], cenpt[2]])
             mtl = self._matman.GetMaterial(matname)
-            prim: Usd.Prim = self._stage.GetPrimAtPath(meshname)
+            stage = omni.usd.get_context().get_stage()
+            prim: Usd.Prim = stage.GetPrimAtPath(meshname)
             UsdShade.MaterialBindingAPI(prim).Bind(mtl)
         elif self.p_genmode == "UsdSphere":
             meshname = sphflkname + "/UsdSphere"
-            xformPrim = UsdGeom.Xform.Define(self._stage, meshname)
+            stage = omni.usd.get_context().get_stage()
+            xformPrim = UsdGeom.Xform.Define(stage, meshname)
             sz = rad
             UsdGeom.XformCommonAPI(xformPrim).SetTranslate((cenpt[0], cenpt[1], cenpt[2]))
             UsdGeom.XformCommonAPI(xformPrim).SetScale((sz, sz, sz))
-            spheremesh = UsdGeom.Sphere.Define(self._stage, meshname)
+            spheremesh = UsdGeom.Sphere.Define(stage, meshname)
             mtl = self._matman.GetMaterial(matname)
             UsdShade.MaterialBindingAPI(spheremesh).Bind(mtl)
 

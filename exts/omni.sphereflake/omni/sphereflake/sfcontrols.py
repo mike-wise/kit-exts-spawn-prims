@@ -89,6 +89,7 @@ class SfControls():
 
     def ensure_stage(self):
         # print("ensure_stage")
+        self._stage = omni.usd.get_context().get_stage()
         if self._stage is None:
             self._stage = omni.usd.get_context().get_stage()
             # print(f"ensure_stage got stage:{self._stage}")

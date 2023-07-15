@@ -16,7 +16,7 @@ class SphereMeshFactoryV1():
     _total_quads = 0
 
     def __init__(self) -> None:
-        self._stage = omni.usd.get_context().get_stage()
+        # self._stage = omni.usd.get_context().get_stage()
         pass
 
     def GenPrep(self):
@@ -33,7 +33,8 @@ class SphereMeshFactoryV1():
                     paths=[primpath],
                     new_scales=[sz, sz, sz],
                     new_translations=[cenpt[0], cenpt[1], cenpt[2]])
-        prim: Usd.Prim = self._stage.GetPrimAtPath(primpath)
+        stage = omni.usd.get_context().get_stage()
+        prim: Usd.Prim = stage.GetPrimAtPath(primpath)
         mtl = self._matman.GetMaterial(matname)
         UsdShade.MaterialBindingAPI(prim).Bind(mtl)
 
@@ -41,7 +42,8 @@ class SphereMeshFactoryV1():
         # This will create nlat*nlog quads or twice that many triangles
         # it will need nlat+1 vertices in the latitude direction and nlong vertices in the longitude direction
         # so a total of (nlat+1)*(nlong) vertices
-        spheremesh = UsdGeom.Mesh.Define(self._stage, name)
+        stage = omni.usd.get_context().get_stage()
+        spheremesh = UsdGeom.Mesh.Define(stage, name)
         nlat = self._nlat
         nlng = self._nlng
 
@@ -125,7 +127,7 @@ class SphereMeshFactory():
 
     def __init__(self, matman: MatMan) -> None:
         self._matman = matman
-        self._stage = omni.usd.get_context().get_stage()
+        # self._stage = omni.usd.get_context().get_stage()
 
     def GenPrep(self):
         self._nquads = self.p_nlat*self.p_nlng
@@ -150,7 +152,8 @@ class SphereMeshFactory():
                     paths=[primpath],
                     new_scales=[sz, sz, sz],
                     new_translations=[cenpt[0], cenpt[1], cenpt[2]])
-        prim: Usd.Prim = self._stage.GetPrimAtPath(primpath)
+        stage = omni.usd.get_context().get_stage()
+        prim: Usd.Prim = stage.GetPrimAtPath(primpath)
         mtl = self._matman.GetMaterial(matname)
         UsdShade.MaterialBindingAPI(prim).Bind(mtl)
 
@@ -212,7 +215,8 @@ class SphereMeshFactory():
         # it will need nlat+1 vertices in the latitude direction and nlong vertices in the longitude direction
         # so a total of (nlat+1)*(nlong) vertices
 
-        spheremesh = UsdGeom.Mesh.Define(self._stage, name)
+        stage = omni.usd.get_context().get_stage()
+        spheremesh = UsdGeom.Mesh.Define(stage, name)
 
         # note that vertbuf is local to this function allowing it to be changed in a multithreaded environment
         vertbuf = self._normbuf*radius + cenpt
@@ -254,7 +258,8 @@ class SphereMeshFactory():
         # it will need nlat+1 vertices in the latitude direction and nlong vertices in the longitude direction
         # so a total of (nlat+1)*(nlong) vertices
 
-        spheremesh = UsdGeom.Mesh.Define(self._stage, name)
+        stage = omni.usd.get_context().get_stage()
+        spheremesh = UsdGeom.Mesh.Define(stage, name)
 
         # note that vertbuf is local to this function allowing it to be changed in a multithreaded environment
         vertbuf = await self.CreateVertBuf(radius, cenpt)
