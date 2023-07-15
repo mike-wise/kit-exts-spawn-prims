@@ -84,27 +84,57 @@ class SfcTab1(BaseTab):
         with ui.VStack(style={"margin": sfw.marg}):
             with ui.VStack():
                 with ui.HStack():
+                    clkfn = lambda: asyncio.ensure_future(sfc.on_click_multi_sphereflake()) # noqa : E731
                     sfw._msf_spawn_but = ui.Button("Multi ShereFlake",
                                                    style={'background_color': sfw.darkred},
-                                                   clicked_fn= # noqa : E251
-                                                   lambda: asyncio.ensure_future(sfc.on_click_multi_sphereflake()))
+                                                   clicked_fn=clkfn)
                     with ui.VStack(width=200):
+                        clkfn = lambda x, y, b, m: sfc.on_click_sfx(x, y, b, m) # noqa : E731
                         sfw._nsf_x_but = ui.Button(f"SF x: {sff.p_nsfx}",
                                                    style={'background_color': sfw.darkblue},
-                                                   mouse_pressed_fn= # noqa : E251
-                                                   lambda x, y, b, m: sfc.on_click_sfx(x, y, b, m))
+                                                   mouse_pressed_fn=clkfn)
+                        clkfn = lambda x, y, b, m: sfc.on_click_sfy(x, y, b, m) # noqa : E731
                         sfw._nsf_y_but = ui.Button(f"SF y: {sff.p_nsfy}",
                                                    style={'background_color': sfw.darkblue},
-                                                   mouse_pressed_fn= # noqa : E251
-                                                   lambda x, y, b, m: sfc.on_click_sfy(x, y, b, m))
+                                                   mouse_pressed_fn=clkfn)
+                        clkfn = lambda x, y, b, m: sfc.on_click_sfz(x, y, b, m) # noqa : E731
                         sfw._nsf_z_but = ui.Button(f"SF z: {sff.p_nsfz}",
                                                    style={'background_color': sfw.darkblue},
-                                                   mouse_pressed_fn= # noqa : E251
-                                                   lambda x, y, b, m: sfc.on_click_sfz(x, y, b, m))
-
+                                                   mouse_pressed_fn=clkfn)
                     sfw._tog_bounds_but = ui.Button(f"Bounds:{sfc._bounds_visible}",
                                                     style={'background_color': sfw.darkcyan},
-                                                    clicked_fn=lambda: sfc.toggle_bounds())
+                                                    clicked_fn=sfc.toggle_bounds)
+                with ui.CollapsableFrame("Partial Renders"):
+                    with ui.VStack():
+                        sfw._partial_render_but = ui.Button(f"Partial Render {sff.p_partialRender}",
+                                                            style={'background_color': sfw.darkblue},
+                                                            clicked_fn=sfc.toggle_partial_render)
+                        with ui.HStack():
+                            clkfn = lambda x, y, b, m: sfc.on_click_parital_sfsx(x, y, b, m) # noqa : E731
+                            sfw._part_nsf_sx_but = ui.Button(f"SF partial sx: {sff.p_partial_ssfx}",
+                                                             style={'background_color': sfw.darkblue},
+                                                             mouse_pressed_fn=clkfn)
+                            clkfn = lambda x, y, b, m: sfc.on_click_parital_sfsy(x, y, b, m) # noqa : E731
+                            sfw._part_nsf_sy_but = ui.Button(f"SF partial sy: {sff.p_partial_ssfy}",
+                                                             style={'background_color': sfw.darkblue},
+                                                             mouse_pressed_fn=clkfn)
+                            clkfn = lambda x, y, b, m: sfc.on_click_parital_sfsz(x, y, b, m) # noqa : E731
+                            sfw._part_nsf_sz_but = ui.Button(f"SF partial sz: {sff.p_partial_ssfz}",
+                                                             style={'background_color': sfw.darkblue},
+                                                             mouse_pressed_fn=clkfn)
+                        with ui.HStack():
+                            clkfn = lambda x, y, b, m: sfc.on_click_parital_sfnx(x, y, b, m) # noqa : E731
+                            sfw._part_nsf_nx_but = ui.Button(f"SF partial nx: {sff.p_partial_nsfx}",
+                                                             style={'background_color': sfw.darkblue},
+                                                             mouse_pressed_fn=clkfn)
+                            clkfn = lambda x, y, b, m: sfc.on_click_parital_sfny(x, y, b, m) # noqa : E731
+                            sfw._part_nsf_ny_but = ui.Button(f"SF partial ny: {sff.p_partial_nsfy}",
+                                                             style={'background_color': sfw.darkblue},
+                                                             mouse_pressed_fn=clkfn)
+                            clkfn = lambda x, y, b, m: sfc.on_click_parital_sfnz(x, y, b, m) # noqa : E731
+                            sfw._part_nsf_nz_but = ui.Button(f"SF partial nz: {sff.p_partial_nsfz}",
+                                                             style={'background_color': sfw.darkblue},
+                                                             mouse_pressed_fn=clkfn)
 
 
 class SfcTab2(BaseTab):

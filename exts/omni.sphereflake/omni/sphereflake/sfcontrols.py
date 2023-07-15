@@ -305,6 +305,52 @@ class SfControls():
         self.UpdateMQuads()
         self.UpdateGpuMemory()
 
+    def toggle_partial_render(self):
+        self.sff.p_partialRender = not self.sff.p_partialRender
+        self.sfw._partial_render_but.text = f"Partial Render: {self.sff.p_partialRender}"
+
+    def on_click_parital_sfsx(self, x, y, button, modifier):
+        tmp = self.round_increment(self.sff.p_partial_ssfx, button == 1, self.sff.p_nsfx-1, 0)
+        self.sfw._part_nsf_sx_but.text = f"SF partial sx: {tmp}"
+        self.sff.p_partial_ssfx = tmp
+        self.UpdateMQuads()
+        self.UpdateGpuMemory()
+
+    def on_click_parital_sfsy(self, x, y, button, modifier):
+        tmp = self.round_increment(self.sff.p_partial_ssfy, button == 1, self.sff.p_nsfy-1, 0)
+        self.sfw._part_nsf_sy_but.text = f"SF partial sy: {tmp}"
+        self.sff.p_partial_ssfy = tmp
+        self.UpdateMQuads()
+        self.UpdateGpuMemory()
+
+    def on_click_parital_sfsz(self, x, y, button, modifier):
+        tmp = self.round_increment(self.sff.p_partial_ssfz, button == 1, self.sff.p_nsfz-1, 0)
+        self.sfw._part_nsf_sz_but.text = f"SF partial sz: {tmp}"
+        self.sff.p_partial_ssfz = tmp
+        self.UpdateMQuads()
+        self.UpdateGpuMemory()
+
+    def on_click_parital_sfnx(self, x, y, button, modifier):
+        tmp = self.round_increment(self.sff.p_partial_nsfx, button == 1, self.sff.p_nsfx, 1)
+        self.sfw._part_nsf_nx_but.text = f"SF partial nx: {tmp}"
+        self.sff.p_partial_nsfx = tmp
+        self.UpdateMQuads()
+        self.UpdateGpuMemory()
+
+    def on_click_parital_sfny(self, x, y, button, modifier):
+        tmp = self.round_increment(self.sff.p_partial_nsfy, button == 1, self.sff.p_nsfy, 1)
+        self.sfw._part_nsf_ny_but.text = f"SF partial ny: {tmp}"
+        self.sff.p_partial_nsfy = tmp
+        self.UpdateMQuads()
+        self.UpdateGpuMemory()
+
+    def on_click_parital_sfnz(self, x, y, button, modifier):
+        tmp = self.round_increment(self.sff.p_partial_nsfz, button == 1, self.sff.p_nsfz, 1)
+        self.sfw._part_nsf_nz_but.text = f"SF partial nz: {tmp}"
+        self.sff.p_partial_nsfz = tmp
+        self.UpdateMQuads()
+        self.UpdateGpuMemory()
+
     def on_click_sfy(self, x, y, button, modifier):
         nsfy = self.round_increment(self.sff.p_nsfy, button == 1, 20, 1)
         self.sfw._nsf_y_but.text = f"SF - y:{nsfy}"

@@ -24,6 +24,14 @@ class SphereFlakeFactory():
     p_nsfx = 1
     p_nsfy = 1
     p_nsfz = 1
+    p_partialRender = False
+    p_partial_ssfx = 0
+    p_partial_ssfy = 0
+    p_partial_ssfz = 0
+    p_partial_nsfx = 1
+    p_partial_nsfy = 1
+    p_partial_nsfz = 1
+    p_nsfz = 1
     p_sf_matname = "Mirror"
     p_bb_matname = "Red Glass"
     p_make_bounds_visible = False
@@ -119,22 +127,36 @@ class SphereFlakeFactory():
         self.GenPrep()
         cpt = Gf.Vec3f(0, self.p_rad, 0)
         # extentvec = self.GetFlakeExtent(depth, self._rad, self._radratio)
-        nx = self.p_nsfx
-        ny = self.p_nsfy
-        nz = self.p_nsfz
+        if self.p_partialRender:
+            sx = self.p_partial_ssfx
+            sy = self.p_partial_ssfy
+            sz = self.p_partial_ssfz
+            nx = self.p_partial_nsfx
+            ny = self.p_partial_nsfy
+            nz = self.p_partial_nsfz
+        else:
+            sx = 0
+            sy = 0
+            sz = 0
+            nx = self.p_nsfx
+            ny = self.p_nsfy
+            nz = self.p_nsfz
         extentvec = self.GetSphereFlakeBoundingBox()
         count = self._count
 
         self._createlist = []
         self._bbcubelist = []
-        for ix in range(nx):
-            for iy in range(ny):
-                for iz in range(nz):
+        for iix in range(nx):
+            for iiy in range(ny):
+                for iiz in range(nz):
+                    ix = iix+sx
+                    iy = iiy+sy
+                    iz = iiz+sz
                     count += 1
                     # primpath = f"/World/SphereFlake_{count}"
                     primpath = f"/World/SphereFlake_{ix}_{iy}_{iz}__{nx}_{ny}_{nz}"
 
-                    cpt = self.GetCenterPosition(ix, nx, iy, ny, iz, nz, extentvec)
+                    cpt = self.GetCenterPosition(ix, self.p_nsfx, iy, self.p_nsfy, iz, self.p_nsfz, extentvec)
 
                     self.Generate(primpath, cpt)
                     self._createlist.append(primpath)
