@@ -1,4 +1,3 @@
-import omni.ext
 import omni.kit.commands as okc
 import omni.usd
 import carb
@@ -12,8 +11,8 @@ from .ovut import MatMan
 
 latest_sf_gen_time = 0
 
-class SphereFlakeFactory():
 
+class SphereFlakeFactory():
     _matman: MatMan = None
     _smf: SphereMeshFactory = None
     p_genmode = "UsdSphere"

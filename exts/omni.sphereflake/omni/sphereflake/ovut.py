@@ -1,4 +1,3 @@
-import omni.ext
 import omni.kit.commands as okc
 import omni.usd
 import os
@@ -32,17 +31,30 @@ def cross_product(v1: Gf.Vec3f, v2: Gf.Vec3f) -> Gf.Vec3f:
     return rv
 
 
-def write_out_syspath(fname: str = 'd:/nv/ov/pythonpath.txt') -> None:
-    # Write out the python path to a file for the settings.json python.analsys.extraPaths setting
+def write_out_syspath(fname: str = 'd:/nv/ov/syspath.txt', indent=False) -> None:
+    # Write out the python syspath to a file
+    # Indent should be True if to be used for the settings.json python.analsys.extraPaths setting
     pplist = sys.path
     with open(fname, 'w') as f:
         for line in pplist:
             nline = line.replace("\\", "/")
-            nnline = f"        \"{nline}\",\n"
+            if indent:
+                nnline = f"        \"{nline}\",\n"
+            else:
+                nnline = f"\"{nline}\",\n"
             f.write(nnline)
 
-    # This causes the system to hang probably because it is flooding the carb log
-    #  print(f"sys.path:{sys.path}")
+
+def read_in_syspath(fname: str = 'd:/nv/ov/syspath.txt') -> None:
+    # Read in the python path from a file
+    with open(fname, 'r') as f:
+        for line in f:
+            nline = line.replace(',', '')
+            nline = nline.replace('"', '')
+            nline = nline.replace('"', '')
+            nline = nline.replace('\n', '')
+            nline = nline.replace(' ', '')
+            sys.path.append(nline)
 
 
 class MatMan():

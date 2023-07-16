@@ -1,8 +1,17 @@
-import omni.ext
-from .ovut import MatMan
+import omni.ext  # this needs to be included in an extension's extension.py
+from .ovut import MatMan, write_out_syspath
 from .sphereflake import SphereMeshFactory, SphereFlakeFactory
 from .sfcontrols import SfControls
 from .sfwindow import SfcWindow
+import omni.kit.commands as okc
+import omni.usd
+from pxr import Gf, Sdf, Usd, UsdGeom, UsdUtils, Ar
+
+# Omni imports
+import omni.client
+import omni.usd_resolver
+
+import os
 
 # fflake8: noqa
 
@@ -23,6 +32,14 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
         self._window_sfcon.ensure_stage()
 
     def on_startup(self, ext_id):
+
+        write_out_syspath("d:/nv/ov/sphereflake_benchmark_syspath.txt")
+        path = os.environ["PATH"]
+        with open("d:/nv/ov/sphereflake_benchmark_path.txt", "w") as f:
+            npath = path.replace(";", "\n")
+            f.write(npath)
+
+        print(f"okc.__file__ = {okc.__file__}")
 
         # Model objects
         self._matman = MatMan()

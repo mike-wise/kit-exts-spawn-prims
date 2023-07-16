@@ -1,5 +1,3 @@
-import omni.ext
-# import omni.ui as ui
 import omni.kit.commands as okc
 import omni.usd
 import time

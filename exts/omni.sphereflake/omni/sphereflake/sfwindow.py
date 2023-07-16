@@ -1,4 +1,3 @@
-# import omni.ext
 import omni.ui as ui
 from omni.ui import color as clr
 import asyncio

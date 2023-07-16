@@ -1,4 +1,3 @@
-import omni.ext
 import omni.kit.commands as okc
 import omni.usd
 import math
