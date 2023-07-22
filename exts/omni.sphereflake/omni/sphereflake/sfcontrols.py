@@ -3,11 +3,15 @@ import omni.usd
 import time
 import datetime
 import json
+import socket
+import psutil
 from pxr import Gf, Sdf, Usd, UsdGeom, UsdShade
 from .ovut import MatMan, delete_if_exists, write_out_syspath, truncf
 from .spheremesh import SphereMeshFactory
 from .sphereflake import SphereFlakeFactory
 import nvidia_smi
+# import multiprocessing
+import subprocess
 
 # fflake8: noqa
 
@@ -28,6 +32,7 @@ class SfControls():
     _vsc_test8 = False
     sfw = None  # We can't give this a type because it would be a circular reference
     p_writelog = True
+    p_seriesname = "None"
 
     def __init__(self, matman: MatMan, smf: SphereMeshFactory, sff: SphereFlakeFactory):
         print("SfControls __init__")
@@ -176,8 +181,7 @@ class SfControls():
 
         elap = time.time() - start_time
         self.sfw._statuslabel.text = f"SphereFlake took elapsed: {elap:.2f} s"
-        self.UpdateNQuads()
-        self.UpdateGpuMemory()
+        self.UpdateStuff()
 
     async def generate_sflakes(self):
 
@@ -187,8 +191,6 @@ class SfControls():
         sff.p_genmode = self.get_sf_genmode()
         sff.p_genform = self.get_sf_genform()
         sff.p_rad = self._sf_size
-        # print(f"slider: {type(self._sf_radratio_slider)}")
-        # sff._radratio = self._sf_radratio_slider.get_value_as_float()
         self.update_radratio()
 
         sff.p_sf_matname = self.get_curmat_name()
@@ -196,31 +198,31 @@ class SfControls():
         sff.p_make_bounds_visible = self._bounds_visible
         sff.p_bb_matname = self.get_curmat_bbox_name()
 
-        new_count = sff.GenerateMany()
+        if sff.p_parallelRender:
+            new_count = sff.GenerateManyParallel()
+        else:
+            new_count = sff.GenerateMany()
 
         self._count += new_count
 
-    async def on_click_multi_sphereflake(self):
-        self.ensure_stage()
-        extent3f = self.sff.GetSphereFlakeBoundingBox()
-        self.setup_environment(extent3f, force=True)
-
-        start_time = time.time()
-        await self.generate_sflakes()
-        elap = time.time() - start_time
-
-        nflakes = self.sff.p_nsfx * self.sff.p_nsfz
-
-        self.sfw._statuslabel.text = f"{nflakes} flakes took elapsed: {elap:.2f} s"
-
-        self.UpdateNQuads()
-        self.UpdateGpuMemory()
-        ntris, nprims = self.sff.CalcTrisAndPrims()
-        gpuinfo = self._gpuinfo
-        om = float(1024*1024*1024)
-        # msg = f"GPU Mem tot:  {gpuinfo.total/om:.2f}: used:  {gpuinfo.used/om:.2f} free:  {gpuinfo.free/om:.2f} GB"
+    def write_log(self, elap: float = 0.0):
         if self.p_writelog:
-            rundict = {"1-genmode": self.sff.p_genmode,
+            nflakes = self.sff.p_nsfx * self.sff.p_nsfz
+            ntris, nprims = self.sff.CalcTrisAndPrims()
+            gpuinfo = self._gpuinfo
+            om = float(1024*1024*1024)
+            hostname = socket.gethostname()
+            memused = psutil.virtual_memory().used
+            memtot = psutil.virtual_memory().total
+            memfree = psutil.virtual_memory().free
+            cores = psutil.cpu_count()
+            # msg = f"GPU Mem tot:  {gpuinfo.total/om:.2f}: used: {gpuinfo.used/om:.2f} free: {gpuinfo.free/om:.2f} GB"
+            # msg += f"\nCPU cores: {cores}"
+            # msg += f"\nSys Mem tot: {memtot/om:.2f}: used: {memused/om:.2f} free: {memfree/om:.2f} GB"
+            rundict = {"0-seriesname": self.p_seriesname,
+                       "0-hostname": hostname,
+                       "0-date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                       "1-genmode": self.sff.p_genmode,
                        "1-genform": self.sff.p_genform,
                        "1-depth": self.sff.p_depth,
                        "1-rad": self.sff.p_rad,
@@ -235,8 +237,28 @@ class SfControls():
                        "3-gpu_gbmem_tot": truncf(gpuinfo.total/om, 3),
                        "3-gpu_gbmem_used": truncf(gpuinfo.used/om, 3),
                        "3-gpu_gbmem_free": truncf(gpuinfo.free/om, 3),
+                       "4-sys_gbmem_tot": truncf(memtot/om, 3),
+                       "4-sys_gbmem_used": truncf(memused/om, 3),
+                       "4-sys_gbmem_free": truncf(memfree/om, 3),
+                       "5-cpu_cores": cores,
                        }
             self.WriteRunLog(rundict)
+
+    async def on_click_multi_sphereflake(self):
+        self.ensure_stage()
+        extent3f = self.sff.GetSphereFlakeBoundingBox()
+        self.setup_environment(extent3f, force=True)
+
+        start_time = time.time()
+        await self.generate_sflakes()
+        elap = time.time() - start_time
+
+        nflakes = self.sff.p_nsfx * self.sff.p_nsfz
+
+        self.sfw._statuslabel.text = f"{nflakes} flakes took elapsed: {elap:.2f} s"
+
+        self.UpdateStuff()
+        self.write_log(elap)
 
     def spawnprim(self, primtype):
         self.ensure_stage()
@@ -273,36 +295,56 @@ class SfControls():
             val = maxval
         return val
 
+    def UpdateStuff(self):
+        self.UpdateNQuads()
+        self.UpdateMQuads()
+        self.UpdateGpuMemory()
+
     def on_click_sfdepth(self, x, y, button, modifier):
         depth = self.round_increment(self.sff.p_depth, button == 1, 5, 0)
         self.sfw._sf_depth_but.text = f"Depth:{depth}"
         self.sff.p_depth = depth
-        self.UpdateNQuads()
-        self.UpdateMQuads()
-        self.UpdateGpuMemory()
+        self.UpdateStuff()
 
     def on_click_nlat(self, x, y, button, modifier):
         nlat = self.round_increment(self.smf.p_nlat, button == 1, 16, 3)
         self._sf_nlat_but.text = f"Nlat:{nlat}"
         self.smf.p_nlat = nlat
-        self.UpdateNQuads()
-        self.UpdateMQuads()
-        self.UpdateGpuMemory()
+        self.UpdateStuff()
 
     def on_click_nlng(self, x, y, button, modifier):
         nlng = self.round_increment(self.smf.p_nlng, button == 1, 16, 3)
         self._sf_nlng_but.text = f"Nlng:{nlng}"
         self.smf.p_nlng = nlng
-        self.UpdateNQuads()
-        self.UpdateMQuads()
-        self.UpdateGpuMemory()
+        self.UpdateStuff()
 
     def on_click_sfx(self, x, y, button, modifier):
         nsfx = self.round_increment(self.sff.p_nsfx, button == 1, 20, 1)
         self.sfw._nsf_x_but.text = f"SF - x:{nsfx}"
         self.sff.p_nsfx = nsfx
-        self.UpdateMQuads()
-        self.UpdateGpuMemory()
+        self.UpdateStuff()
+
+    def toggle_parallel_render(self):
+        self.sff.p_parallelRender = not self.sff.p_parallelRender
+        self.sfw._parallel_render_but.text = f"Parallel Render: {self.sff.p_parallelRender}"
+
+    def on_click_parallel_nxbatch(self, x, y, button, modifier):
+        tmp = self.round_increment(self.sff.p_parallel_nxbatch, button == 1, self.sff.p_nsfx, 1)
+        self.sfw._parallel_nxbatch_but.text = f"SF parallel x: {self.sff.p_parallel_nxbatch}"
+        self.sff.p_parallel_nxbatch = tmp
+        self.UpdateStuff()
+
+    def on_click_parallel_nybatch(self, x, y, button, modifier):
+        tmp = self.round_increment(self.sff.p_parallel_nybatch, button == 1, self.sff.p_nsfy, 1)
+        self.sfw._parallel_nybatch_but.text = f"SF parallel y: {self.sff.p_parallel_nybatch}"
+        self.sff.p_parallel_nybatch = tmp
+        self.UpdateStuff()
+
+    def on_click_parallel_nzbatch(self, x, y, button, modifier):
+        tmp = self.round_increment(self.sff.p_parallel_nzbatch, button == 1, self.sff.p_nsfz, 1)
+        self.sfw._parallel_nzbatch_but.text = f"SF parallel z: {self.sff.p_parallel_nzbatch}"
+        self.sff.p_parallel_nzbatch = tmp
+        self.UpdateStuff()
 
     def toggle_partial_render(self):
         self.sff.p_partialRender = not self.sff.p_partialRender
@@ -312,60 +354,68 @@ class SfControls():
         tmp = self.round_increment(self.sff.p_partial_ssfx, button == 1, self.sff.p_nsfx-1, 0)
         self.sfw._part_nsf_sx_but.text = f"SF partial sx: {tmp}"
         self.sff.p_partial_ssfx = tmp
-        self.UpdateMQuads()
-        self.UpdateGpuMemory()
+        self.UpdateStuff()
 
     def on_click_parital_sfsy(self, x, y, button, modifier):
         tmp = self.round_increment(self.sff.p_partial_ssfy, button == 1, self.sff.p_nsfy-1, 0)
         self.sfw._part_nsf_sy_but.text = f"SF partial sy: {tmp}"
         self.sff.p_partial_ssfy = tmp
-        self.UpdateMQuads()
-        self.UpdateGpuMemory()
+        self.UpdateStuff()
 
     def on_click_parital_sfsz(self, x, y, button, modifier):
         tmp = self.round_increment(self.sff.p_partial_ssfz, button == 1, self.sff.p_nsfz-1, 0)
         self.sfw._part_nsf_sz_but.text = f"SF partial sz: {tmp}"
         self.sff.p_partial_ssfz = tmp
-        self.UpdateMQuads()
-        self.UpdateGpuMemory()
+        self.UpdateStuff()
 
     def on_click_parital_sfnx(self, x, y, button, modifier):
         tmp = self.round_increment(self.sff.p_partial_nsfx, button == 1, self.sff.p_nsfx, 1)
         self.sfw._part_nsf_nx_but.text = f"SF partial nx: {tmp}"
         self.sff.p_partial_nsfx = tmp
-        self.UpdateMQuads()
-        self.UpdateGpuMemory()
+        self.UpdateStuff()
 
     def on_click_parital_sfny(self, x, y, button, modifier):
         tmp = self.round_increment(self.sff.p_partial_nsfy, button == 1, self.sff.p_nsfy, 1)
         self.sfw._part_nsf_ny_but.text = f"SF partial ny: {tmp}"
         self.sff.p_partial_nsfy = tmp
-        self.UpdateMQuads()
-        self.UpdateGpuMemory()
+        self.UpdateStuff()
 
     def on_click_parital_sfnz(self, x, y, button, modifier):
         tmp = self.round_increment(self.sff.p_partial_nsfz, button == 1, self.sff.p_nsfz, 1)
         self.sfw._part_nsf_nz_but.text = f"SF partial nz: {tmp}"
         self.sff.p_partial_nsfz = tmp
-        self.UpdateMQuads()
-        self.UpdateGpuMemory()
+        self.UpdateStuff()
 
     def on_click_sfy(self, x, y, button, modifier):
         nsfy = self.round_increment(self.sff.p_nsfy, button == 1, 20, 1)
         self.sfw._nsf_y_but.text = f"SF - y:{nsfy}"
         self.sff.p_nsfy = nsfy
-        self.UpdateMQuads()
-        self.UpdateGpuMemory()
+        self.UpdateStuff()
 
     def on_click_sfz(self, x, y, button, modifier):
         nsfz = self.round_increment(self.sff.p_nsfz, button == 1, 20, 1)
         self.sfw._nsf_z_but.text = f"SF - z:{nsfz}"
         self.sff.p_nsfz = nsfz
-        self.UpdateMQuads()
-        self.UpdateGpuMemory()
+        self.UpdateStuff()
 
     def on_click_spawnprim(self):
         self.spawnprim(self._curprim)
+
+    def xprocess():
+        pass
+        # print("xprocess started")
+
+    def on_click_launchxproc(self):
+        self.ensure_stage()
+        cmdpath = "D:\\nv\\ov\\ext\\sphereflake-benchmark\\exts\\omni.sphereflake\\omni\\sphereflake"
+        subprocess.call(["python.exe"])
+        # subprocess.call([cmdpath,"hello.py"])
+        # print("launching xproc")
+        # p1 = multiprocessing.Process(target=self.xprocess)
+        # p1.start()  # Casues app to stop servicing events
+        # self._xproc = XProcess(self._stage, self._curprim, self.smf, self.sff)
+        # self._xproc.start()
+
 
     def on_click_clearprims(self):
         self.ensure_stage()
@@ -412,10 +462,17 @@ class SfControls():
         self._gpuinfo = gpuinfo
         om = float(1024*1024*1024)
         msg = f"GPU Mem tot:  {gpuinfo.total/om:.2f}: used:  {gpuinfo.used/om:.2f} free:  {gpuinfo.free/om:.2f} GB"
-        refcnt = self._matman.fetchCount
+        memused = psutil.virtual_memory().used
+        memtot = psutil.virtual_memory().total
+        memfree = psutil.virtual_memory().free
+        msg += f"\nSys Mem tot: {memtot/om:.2f}: used: {memused/om:.2f} free: {memfree/om:.2f} GB"
+        cores = psutil.cpu_count()
+        msg += f"\nCPU cores: {cores}"
+        refcnt = self._matman.refCount
         ftccnt = self._matman.fetchCount
         skpcnt = self._matman.skipCount
-        msg += f"\n Materials ref:{refcnt} fetched: {ftccnt} skipped: {skpcnt}"
+        msg += f"\n Materials ref: {refcnt} fetched: {ftccnt} skipped: {skpcnt}"
+
         self.sfw._memlabel.text = msg
 
     def get_curmat_mat(self):
@@ -458,7 +515,6 @@ class SfControls():
 
         if rundict is None:
             rundict = {}
-        rundict["0-date"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         jline = json.dumps(rundict, sort_keys=True)
 

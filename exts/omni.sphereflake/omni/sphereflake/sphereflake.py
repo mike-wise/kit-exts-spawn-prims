@@ -30,7 +30,11 @@ class SphereFlakeFactory():
     p_partial_nsfx = 1
     p_partial_nsfy = 1
     p_partial_nsfz = 1
-    p_nsfz = 1
+    p_parallelRender = False
+    p_parallel_nxbatch = 1
+    p_parallel_nybatch = 1
+    p_parallel_nzbatch = 1
+
     p_sf_matname = "Mirror"
     p_bb_matname = "Red Glass"
     p_make_bounds_visible = False
@@ -122,10 +126,43 @@ class SphereFlakeFactory():
             sz += 2*nrad
         return Gf.Vec3f(sz, sz, sz)
 
+    def GenerateManyParallel(self):
+        nxchunk = self.p_nsfx // self.p_parallel_nxbatch
+        nychunk = self.p_nsfy // self.p_parallel_nybatch
+        nzchunk = self.p_nsfz // self.p_parallel_nzbatch
+        print(f"GenerateManyParallel: self.p_nsfx:{self.p_nsfx} self.p_nsfy:{self.p_nsfy} self.p_nsfz:{self.p_nsfz}")
+        print(f"GenerateManyParallel: self.p_parallel_nxbatch:{self.p_parallel_nxbatch} self.p_parallel_nybatch:{self.p_parallel_nybatch} self.p_parallel_nzbatch:{self.p_parallel_nzbatch}")
+        omatname = self.p_sf_matname
+        amatname = "Red_Glass"
+        ibatch = 0
+        sfcount = 0
+        print(f"GenerateManyParallel: nxchunk:{nxchunk} nychunk:{nychunk} nzchunk:{nzchunk}")
+        for iix in range(self.p_parallel_nxbatch):
+            for iiy in range(self.p_parallel_nybatch):
+                for iiz in range(self.p_parallel_nzbatch):
+                    if ibatch % 2 == 0:
+                        self.p_sf_matname = omatname
+                    else:
+                        self.p_sf_matname = amatname
+                    print(f"   GenerateManyParallel: batch:{ibatch} mat:{self.p_sf_matname}")
+                    sx = iix*nxchunk
+                    sy = iiy*nychunk
+                    sz = iiz*nzchunk
+                    nx = nxchunk
+                    ny = nychunk
+                    nz = nzchunk
+                    if sx+nx > self.p_nsfx:
+                        nx = self.p_nsfx - sx
+                    if sy+ny > self.p_nsfy:
+                        ny = self.p_nsfy - sy
+                    if sz+nz > self.p_nsfz:
+                        nz = self.p_nsfz - sz
+                    print(f"   GenerateManyParallel: sx:{sx} sy:{sy} sz:{sz} nx:{nx} ny:{ny} nz:{nz}")
+                    sfcount += self.GenerateManySubcube(sx, sy, sz, nx, ny, nz)
+                    ibatch += 1
+        return sfcount
+
     def GenerateMany(self):
-        self.GenPrep()
-        cpt = Gf.Vec3f(0, self.p_rad, 0)
-        # extentvec = self.GetFlakeExtent(depth, self._rad, self._radratio)
         if self.p_partialRender:
             sx = self.p_partial_ssfx
             sy = self.p_partial_ssfy
@@ -140,6 +177,13 @@ class SphereFlakeFactory():
             nx = self.p_nsfx
             ny = self.p_nsfy
             nz = self.p_nsfz
+        sfcount = self.GenerateManySubcube(sx, sy, sz, nx, ny, nz)
+        return sfcount
+
+    def GenerateManySubcube(self, sx: int, sy: int, sz: int, nx: int, ny: int, nz: int) -> int:
+        self.GenPrep()
+        cpt = Gf.Vec3f(0, self.p_rad, 0)
+        # extentvec = self.GetFlakeExtent(depth, self._rad, self._radratio)
         extentvec = self.GetSphereFlakeBoundingBox()
         count = self._count
 

@@ -151,7 +151,6 @@ class MatMan():
     def RealizeMaterial(self, matname: str):
         typ = self.matlib[matname]["typ"]
         spec = self.matlib[matname]["spec"]
-        self.refCount += 1
         if typ == "mtl":
             self.CopyRemoteMaterial(matname, spec)
         elif typ == "tex":
@@ -190,6 +189,7 @@ class MatMan():
         return list(self.matlib.keys())
 
     def GetMaterial(self, key):
+        self.refCount += 1
         if key in self.matlib:
             if not self.matlib[key]["realized"]:
                 self.RealizeMaterial(key)

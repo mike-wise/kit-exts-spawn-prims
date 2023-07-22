@@ -56,9 +56,12 @@ class SfcWindow(ui.Window):
                 self.tab_group = TabGroup([t1, t2, t3, t4, t5])
                 self._statuslabel = ui.Label("Status: Ready")
                 self._memlabel = ui.Button("Memory tot/used/free", clicked_fn=sfc.UpdateGpuMemory)
-                ui.Button("Clear Prims",
+                ui.Button("Clear Primitives",
                           style={'background_color': self.darkyellow},
                           clicked_fn=lambda: sfc.on_click_clearprims())
+                ui.Button("Launch Xproc",
+                          style={'background_color': self.darkgreen},
+                          clicked_fn=lambda: sfc.on_click_launchxproc())
 
     def on_close(self):
         pass
@@ -106,7 +109,7 @@ class SfcTab1(BaseTab):
                 with ui.CollapsableFrame("Partial Renders"):
                     with ui.VStack():
                         sfw._partial_render_but = ui.Button(f"Partial Render {sff.p_partialRender}",
-                                                            style={'background_color': sfw.darkblue},
+                                                            style={'background_color': sfw.darkcyan},
                                                             clicked_fn=sfc.toggle_partial_render)
                         with ui.HStack():
                             clkfn = lambda x, y, b, m: sfc.on_click_parital_sfsx(x, y, b, m) # noqa : E731
@@ -134,6 +137,24 @@ class SfcTab1(BaseTab):
                             sfw._part_nsf_nz_but = ui.Button(f"SF partial nz: {sff.p_partial_nsfz}",
                                                              style={'background_color': sfw.darkblue},
                                                              mouse_pressed_fn=clkfn)
+                with ui.CollapsableFrame("Parallel Renders"):
+                    with ui.VStack():
+                        sfw._parallel_render_but = ui.Button(f"Parallel Render {sff.p_parallelRender}",
+                                                             style={'background_color': sfw.darkcyan},
+                                                             clicked_fn=sfc.toggle_parallel_render)
+                        with ui.HStack():
+                            clkfn = lambda x, y, b, m: sfc.on_click_parallel_nxbatch(x, y, b, m) # noqa : E731
+                            sfw._parallel_nxbatch_but = ui.Button(f"SF parallel x: {sff.p_parallel_nxbatch}",
+                                                                  style={'background_color': sfw.darkblue},
+                                                                  mouse_pressed_fn=clkfn)
+                            clkfn = lambda x, y, b, m: sfc.on_click_parallel_nybatch(x, y, b, m) # noqa : E731
+                            sfw._parallel_nybatch_but = ui.Button(f"SF parallel y: {sff.p_parallel_nybatch}",
+                                                                  style={'background_color': sfw.darkblue},
+                                                                  mouse_pressed_fn=clkfn)
+                            clkfn = lambda x, y, b, m: sfc.on_click_parallel_nzbatch(x, y, b, m) # noqa : E731
+                            sfw._parallel_nzbatch_but = ui.Button(f"SF pararllel z: {sff.p_parallel_nzbatch}",
+                                                                  style={'background_color': sfw.darkblue},
+                                                                  mouse_pressed_fn=clkfn)
 
 
 class SfcTab2(BaseTab):
