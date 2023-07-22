@@ -127,9 +127,9 @@ class SphereFlakeFactory():
         return Gf.Vec3f(sz, sz, sz)
 
     def GenerateManyParallel(self):
-        nxchunk = self.p_nsfx // self.p_parallel_nxbatch
-        nychunk = self.p_nsfy // self.p_parallel_nybatch
-        nzchunk = self.p_nsfz // self.p_parallel_nzbatch
+        nxchunk = math.ceil(self.p_nsfx / self.p_parallel_nxbatch)
+        nychunk = math.ceil(self.p_nsfy / self.p_parallel_nybatch)
+        nzchunk = math.ceil(self.p_nsfz / self.p_parallel_nzbatch)
         print(f"GenerateManyParallel: self.p_nsfx:{self.p_nsfx} self.p_nsfy:{self.p_nsfy} self.p_nsfz:{self.p_nsfz}")
         print(f"GenerateManyParallel: self.p_parallel_nxbatch:{self.p_parallel_nxbatch} self.p_parallel_nybatch:{self.p_parallel_nybatch} self.p_parallel_nzbatch:{self.p_parallel_nzbatch}")
         omatname = self.p_sf_matname
@@ -140,7 +140,8 @@ class SphereFlakeFactory():
         for iix in range(self.p_parallel_nxbatch):
             for iiy in range(self.p_parallel_nybatch):
                 for iiz in range(self.p_parallel_nzbatch):
-                    if ibatch % 2 == 0:
+                    iixyz = iix + iiy + iiz
+                    if iixyz % 2 == 0:
                         self.p_sf_matname = omatname
                     else:
                         self.p_sf_matname = amatname

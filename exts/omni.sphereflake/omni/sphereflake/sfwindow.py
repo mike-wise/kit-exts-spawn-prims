@@ -79,9 +79,9 @@ class SfcTab1(BaseTab):
         # print(f"SfcTab1.init {type(sfc)}")
 
     def build_fn(self):
-        sfw = self.sfw
-        sfc = self.sfc
-        sff = self.sfw.sff
+        sfw: SfcWindow = self.sfw
+        sfc: SfControls = self.sfc
+        sff: SphereFlakeFactory = self.sfw.sff
         # print(f"SfcTab1.build_fn {type(sfc)}")
         with ui.VStack(style={"margin": sfw.marg}):
             with ui.VStack():
@@ -144,15 +144,15 @@ class SfcTab1(BaseTab):
                                                              clicked_fn=sfc.toggle_parallel_render)
                         with ui.HStack():
                             clkfn = lambda x, y, b, m: sfc.on_click_parallel_nxbatch(x, y, b, m) # noqa : E731
-                            sfw._parallel_nxbatch_but = ui.Button(f"SF parallel x: {sff.p_parallel_nxbatch}",
+                            sfw._parallel_nxbatch_but = ui.Button(f"SF batch x: {sff.p_parallel_nxbatch}",
                                                                   style={'background_color': sfw.darkblue},
                                                                   mouse_pressed_fn=clkfn)
                             clkfn = lambda x, y, b, m: sfc.on_click_parallel_nybatch(x, y, b, m) # noqa : E731
-                            sfw._parallel_nybatch_but = ui.Button(f"SF parallel y: {sff.p_parallel_nybatch}",
+                            sfw._parallel_nybatch_but = ui.Button(f"SF batch y: {sff.p_parallel_nybatch}",
                                                                   style={'background_color': sfw.darkblue},
                                                                   mouse_pressed_fn=clkfn)
                             clkfn = lambda x, y, b, m: sfc.on_click_parallel_nzbatch(x, y, b, m) # noqa : E731
-                            sfw._parallel_nzbatch_but = ui.Button(f"SF pararllel z: {sff.p_parallel_nzbatch}",
+                            sfw._parallel_nzbatch_but = ui.Button(f"SF batch z: {sff.p_parallel_nzbatch}",
                                                                   style={'background_color': sfw.darkblue},
                                                                   mouse_pressed_fn=clkfn)
 

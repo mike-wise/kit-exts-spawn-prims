@@ -330,19 +330,20 @@ class SfControls():
 
     def on_click_parallel_nxbatch(self, x, y, button, modifier):
         tmp = self.round_increment(self.sff.p_parallel_nxbatch, button == 1, self.sff.p_nsfx, 1)
-        self.sfw._parallel_nxbatch_but.text = f"SF parallel x: {self.sff.p_parallel_nxbatch}"
+        self.sfw._parallel_nxbatch_but.text = f"SF batch x: {tmp}"
         self.sff.p_parallel_nxbatch = tmp
+        print(f"on_click_parallel_nxbatch:{tmp}")
         self.UpdateStuff()
 
     def on_click_parallel_nybatch(self, x, y, button, modifier):
         tmp = self.round_increment(self.sff.p_parallel_nybatch, button == 1, self.sff.p_nsfy, 1)
-        self.sfw._parallel_nybatch_but.text = f"SF parallel y: {self.sff.p_parallel_nybatch}"
+        self.sfw._parallel_nybatch_but.text = f"SF batch y: {tmp}"
         self.sff.p_parallel_nybatch = tmp
         self.UpdateStuff()
 
     def on_click_parallel_nzbatch(self, x, y, button, modifier):
         tmp = self.round_increment(self.sff.p_parallel_nzbatch, button == 1, self.sff.p_nsfz, 1)
-        self.sfw._parallel_nzbatch_but.text = f"SF parallel z: {self.sff.p_parallel_nzbatch}"
+        self.sfw._parallel_nzbatch_but.text = f"SF batch z: {tmp}"
         self.sff.p_parallel_nzbatch = tmp
         self.UpdateStuff()
 
@@ -407,7 +408,7 @@ class SfControls():
 
     def on_click_launchxproc(self):
         self.ensure_stage()
-        cmdpath = "D:\\nv\\ov\\ext\\sphereflake-benchmark\\exts\\omni.sphereflake\\omni\\sphereflake"
+        # cmdpath = "D:\\nv\\ov\\ext\\sphereflake-benchmark\\exts\\omni.sphereflake\\omni\\sphereflake"
         subprocess.call(["python.exe"])
         # subprocess.call([cmdpath,"hello.py"])
         # print("launching xproc")
@@ -415,7 +416,6 @@ class SfControls():
         # p1.start()  # Casues app to stop servicing events
         # self._xproc = XProcess(self._stage, self._curprim, self.smf, self.sff)
         # self._xproc.start()
-
 
     def on_click_clearprims(self):
         self.ensure_stage()
