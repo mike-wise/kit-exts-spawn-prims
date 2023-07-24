@@ -12,6 +12,7 @@ from .sphereflake import SphereFlakeFactory
 import nvidia_smi
 # import multiprocessing
 import subprocess
+# import asyncio
 
 # fflake8: noqa
 
@@ -40,7 +41,9 @@ class SfControls():
         self._matman = matman
         self._count = 0
         self._current_material_name = "Mirror"
-        self._current_bbox_material_name = "Red_Glass"
+        self._current_alt_material_name = "Red_Glass"
+        self._current_bbox_material_name = "Blue_Glass"
+        self._current_floor_material_name = "Mirror"
         self._matkeys = self._matman.GetMaterialNames()
         self._total_quads = 0
         self._sf_size = 50
@@ -74,6 +77,13 @@ class SfControls():
         prim: Usd.Prim = self._stage .GetPrimAtPath(prim_path_sdf)
         if not prim.IsValid():
             okc.execute('CreateMeshPrimWithDefaultXform',	prim_type="Plane", prim_path=ppathstr)
+            floormatname = self.get_curfloormat_name()
+            # omni.kit.commands.execute('BindMaterialCommand', prim_path='/World/Floor',
+            #                           material_path=f'/World/Looks/{floormatname}')
+            mtl = self._matman.GetMaterial(floormatname)
+            stage = omni.usd.get_context().get_stage()
+            prim: Usd.Prim = stage.GetPrimAtPath(ppathstr)
+            UsdShade.MaterialBindingAPI(prim).Bind(mtl)
 
             self._floor_xdim = extent3f[0] / 10
             self._floor_zdim = extent3f[2] / 10
@@ -93,13 +103,13 @@ class SfControls():
     def ensure_stage(self):
         # print("ensure_stage")
         self._stage = omni.usd.get_context().get_stage()
-        if self._stage is None:
-            self._stage = omni.usd.get_context().get_stage()
-            # print(f"ensure_stage got stage:{self._stage}")
-            UsdGeom.SetStageUpAxis(self._stage, UsdGeom.Tokens.y)
-            self._total_quads = 0
-            extent3f = self.sff.GetSphereFlakeBoundingBox()
-            self.setup_environment(extent3f)
+        # if self._stage is None:
+        #     self._stage = omni.usd.get_context().get_stage()
+        #     # print(f"ensure_stage got stage:{self._stage}")
+        #     UsdGeom.SetStageUpAxis(self._stage, UsdGeom.Tokens.y)
+        #     self._total_quads = 0
+        #     extent3f = self.sff.GetSphereFlakeBoundingBox()
+        #     self.setup_environment(extent3f)
 
     def create_billboard(self, primpath: str):
         UsdGeom.SetStageUpAxis(self._stage, UsdGeom.Tokens.y)
@@ -171,6 +181,7 @@ class SfControls():
         # sff._radratio = self._sf_radratio_slider.get_value_as_float()
         self.update_radratio()
         sff.p_sf_matname = self.get_curmat_name()
+        sff.p_sf_alt_matname = self.get_curaltmat_name()
         sff.p_bb_matname = self.get_curmat_bbox_name()
 
         cpt = Gf.Vec3f(0, self._sf_size, 0)
@@ -194,12 +205,14 @@ class SfControls():
         self.update_radratio()
 
         sff.p_sf_matname = self.get_curmat_name()
+        sff.p_sf_alt_matname = self.get_curaltmat_name()
 
         sff.p_make_bounds_visible = self._bounds_visible
         sff.p_bb_matname = self.get_curmat_bbox_name()
 
         if sff.p_parallelRender:
-            new_count = sff.GenerateManyParallel()
+            await sff.GenerateManyParallel()
+            new_count = sff.p_nsfx*sff.p_nsfy*sff.p_nsfz
         else:
             new_count = sff.GenerateMany()
 
@@ -268,6 +281,9 @@ class SfControls():
         elif primtype == "SphereMesh":
             self.on_click_spheremesh()
             return
+        extent3f = self.sff.GetSphereFlakeBoundingBox()
+        self.setup_environment(extent3f, force=True)
+
         primpath = f"/World/Prim_{primtype}_{self._count}"
         okc.execute('CreateMeshPrimWithDefaultXform', prim_type=primtype, prim_path=primpath)
 
@@ -428,7 +444,8 @@ class SfControls():
             if dodelete:
                 # print(f"deleting {cname}")
                 cpath = child_prim.GetPrimPath()
-                okc.execute("DeletePrimsCommand", paths=[cpath])
+                self._stage.RemovePrim(cpath)
+                # okc.execute("DeletePrimsCommand", paths=[cpath])
         self.smf.Clear()
         self.sff.Clear()
         self._count = 0
@@ -486,6 +503,30 @@ class SfControls():
             idx = self.sfw._sf_matbox.get_item_value_model().as_int
             self._current_material_name = self._matkeys[idx]
         return self._current_material_name
+
+    def get_curaltmat_mat(self):
+        if self.sfw._sf_alt_matbox is not None:
+            idx = self.sfw._sf_alt_matbox.get_item_value_model().as_int
+            self._current_alt_material_name = self._matkeys[idx]
+        return self._matman.GetMaterial(self._current_alt_material_name)
+
+    def get_curaltmat_name(self):
+        if self.sfw._sf_alt_matbox is not None:
+            idx = self.sfw._sf_alt_matbox.get_item_value_model().as_int
+            self._current_alt_material_name = self._matkeys[idx]
+        return self._current_alt_material_name
+
+    def get_curfloormat_mat(self):
+        if self.sfw._sf_floor_matbox is not None:
+            idx = self.sfw._sf_floor_matbox.get_item_value_model().as_int
+            self._current_floor_material_name = self._matkeys[idx]
+        return self._matman.GetMaterial(self._current_floor_material_name)
+
+    def get_curfloormat_name(self):
+        if self.sfw._sf_floor_matbox is not None:
+            idx = self.sfw._sf_floor_matbox.get_item_value_model().as_int
+            self._current_floor_material_name = self._matkeys[idx]
+        return self._current_floor_material_name
 
     def get_curmat_bbox_name(self):
         if self.sfw._bb_matbox is not None:

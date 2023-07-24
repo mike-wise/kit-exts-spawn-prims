@@ -18,9 +18,11 @@ def truncf(number, digits) -> float:
 
 
 def delete_if_exists(primpath: str) -> None:
-    stage = omni.usd.get_context().get_stage()
+    ctx = omni.usd.get_context()
+    stage = ctx.get_stage()
     if stage.GetPrimAtPath(primpath):
-        okc.execute("DeletePrimsCommand", paths=[primpath])
+        stage.RemovePrim(primpath)
+        # okc.execute("DeletePrimsCommand", paths=[primpath])
 
 
 def cross_product(v1: Gf.Vec3f, v2: Gf.Vec3f) -> Gf.Vec3f:
@@ -29,6 +31,14 @@ def cross_product(v1: Gf.Vec3f, v2: Gf.Vec3f) -> Gf.Vec3f:
     z = v1[0] * v2[1] - v1[1] * v2[0]
     rv = Gf.Vec3f(x, y, z)
     return rv
+
+
+def write_out_path(fname: str = 'd:/nv/ov/path.txt') -> None:
+    # Write out the path to a file
+    path = os.environ["PATH"]
+    with open(fname, "w") as f:
+        npath = path.replace(";", "\n")
+        f.write(npath)
 
 
 def write_out_syspath(fname: str = 'd:/nv/ov/syspath.txt', indent=False) -> None:

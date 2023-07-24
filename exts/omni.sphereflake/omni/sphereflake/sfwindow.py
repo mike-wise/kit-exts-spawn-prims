@@ -25,7 +25,9 @@ class SfcWindow(ui.Window):
     _statuslabel: ui.Label = None
     _memlabel: ui.Label = None
     _sf_matbox: ui.ComboBox = None
+    _sf_alt_matbox: ui.ComboBox = None
     _bb_matbox: ui.ComboBox = None
+    _sf_floor_matbox: ui.ComboBox = None
     _genmodebox: ui.ComboBox = None
     _genformbox: ui.ComboBox = None
 
@@ -260,9 +262,16 @@ class SfcTab4(BaseTab):
 
             # Material Combo Box
             with ui.HStack():
-                ui.Label("Material:")
+                ui.Label("SF Material 1:")
                 idx = sfc._matkeys.index(sfc._current_material_name)
                 sfw._sf_matbox = ui.ComboBox(idx, *sfc._matkeys).model
+                print("built sfw._sf_matbox")
+
+            with ui.HStack():
+                ui.Label("SF Material 2:")
+                # use the alternate material name
+                idx = sfc._matkeys.index(sfc._current_alt_material_name)
+                sfw._sf_alt_matbox = ui.ComboBox(idx, *sfc._matkeys).model
                 print("built sfw._sf_matbox")
 
             # Bounds Material Combo Box
@@ -270,6 +279,12 @@ class SfcTab4(BaseTab):
                 ui.Label("Bounds Material:")
                 idx = sfc._matkeys.index(sfc._current_bbox_material_name)
                 sfw._bb_matbox = ui.ComboBox(idx, *sfc._matkeys).model
+
+            # Bounds Material Combo Box
+            with ui.HStack():
+                ui.Label("Floor Material:")
+                idx = sfc._matkeys.index(sfc._current_floor_material_name)
+                sfw._sf_floor_matbox = ui.ComboBox(idx, *sfc._matkeys).model
 
 
 class SfcTab5(BaseTab):

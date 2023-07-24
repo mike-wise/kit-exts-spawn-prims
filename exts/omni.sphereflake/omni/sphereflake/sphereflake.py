@@ -8,6 +8,8 @@ from pxr import Gf, Usd, UsdGeom, UsdShade
 from .spheremesh import SphereMeshFactory
 from . import ovut
 from .ovut import MatMan
+# import omni.services.client
+import aiohttp
 
 latest_sf_gen_time = 0
 
@@ -36,7 +38,8 @@ class SphereFlakeFactory():
     p_parallel_nzbatch = 1
 
     p_sf_matname = "Mirror"
-    p_bb_matname = "Red Glass"
+    p_sf_alt_matname = "Red_Glass"
+    p_bb_matname = "Blue_Glass"
     p_make_bounds_visible = False
     _start_time = 0
     _createlist: list = []
@@ -92,7 +95,8 @@ class SphereFlakeFactory():
         totquads, totprims = self.CalcQuadsAndPrims()
         return totquads * 2, totprims
 
-    def GetCenterPosition(self, ix: int, nx: int, iy: int, ny: int,  iz: int, nz: int,  extentvec: Gf.Vec3f, gap: float = 1.1):
+    def GetCenterPosition(self, ix: int, nx: int, iy: int, ny: int,  iz: int, nz: int,
+                          extentvec: Gf.Vec3f, gap: float = 1.1):
         ixoff = (nx-1)/2
         iyoff = -0.28  # wierd offset to make it have the same height as single sphereflake
         izoff = (nz-1)/2
@@ -126,17 +130,32 @@ class SphereFlakeFactory():
             sz += 2*nrad
         return Gf.Vec3f(sz, sz, sz)
 
-    def GenerateManyParallel(self):
+    async def fetch(self, session, url):
+        async with session.get(url) as response:
+            return await response.text()
+
+    async def GenerateManyParallel(self):
         nxchunk = math.ceil(self.p_nsfx / self.p_parallel_nxbatch)
         nychunk = math.ceil(self.p_nsfy / self.p_parallel_nybatch)
         nzchunk = math.ceil(self.p_nsfz / self.p_parallel_nzbatch)
         print(f"GenerateManyParallel: self.p_nsfx:{self.p_nsfx} self.p_nsfy:{self.p_nsfy} self.p_nsfz:{self.p_nsfz}")
-        print(f"GenerateManyParallel: self.p_parallel_nxbatch:{self.p_parallel_nxbatch} self.p_parallel_nybatch:{self.p_parallel_nybatch} self.p_parallel_nzbatch:{self.p_parallel_nzbatch}")
+        original_matname = self.p_sf_matname
+        original_alt_matname = self.p_sf_alt_matname
+
         omatname = self.p_sf_matname
-        amatname = "Red_Glass"
+        amatname = self.p_sf_alt_matname
         ibatch = 0
         sfcount = 0
         print(f"GenerateManyParallel: nxchunk:{nxchunk} nychunk:{nychunk} nzchunk:{nzchunk}")
+        # available_trans_sync = omni.services.client.get_available_transports(is_async=False)
+        # available_trans_async = omni.services.client.get_available_transports(is_async=True)
+        # # availprot = omni.services.client.get_available_protocols()
+        # client = omni.services.client.AsyncClient("http://localhost:8211/sphereflake")
+        self._createlist = []
+        self._bbcubelist = []
+        tasks = []
+        baseurl = "http://localhost:8211/sphereflake/build-sf-set"
+        sess = aiohttp.ClientSession()
         for iix in range(self.p_parallel_nxbatch):
             for iiy in range(self.p_parallel_nybatch):
                 for iiz in range(self.p_parallel_nzbatch):
@@ -152,15 +171,30 @@ class SphereFlakeFactory():
                     nx = nxchunk
                     ny = nychunk
                     nz = nzchunk
-                    if sx+nx > self.p_nsfx:
-                        nx = self.p_nsfx - sx
-                    if sy+ny > self.p_nsfy:
-                        ny = self.p_nsfy - sy
-                    if sz+nz > self.p_nsfz:
-                        nz = self.p_nsfz - sz
-                    print(f"   GenerateManyParallel: sx:{sx} sy:{sy} sz:{sz} nx:{nx} ny:{ny} nz:{nz}")
+                    nnx = self.p_nsfx
+                    nny = self.p_nsfy
+                    nnz = self.p_nsfz
+                    nx = min(nx, nnx-sx)
+                    ny = min(ny, nny-sy)
+                    nz = min(nz, nnz-sz)
+                    url = f"{baseurl}?matname={self.p_sf_matname}"
+                    url += f"&sx={sx}&nx={nx}&nnx={nnx}"
+                    url += f"&sy={sy}&ny={ny}&nny={nny}"
+                    url += f"&sz={sz}&nz={nz}&nnz={nnz}"
+                    t = asyncio.create_task(self.fetch(sess, url))
+                    t.add_done_callback(tasks.remove)
+                    tasks.append(t)
+                    print(f"GMP sf_ - url:{url}")
                     sfcount += self.GenerateManySubcube(sx, sy, sz, nx, ny, nz)
                     ibatch += 1
+        print(f"GMP: sf_ waiting for tasks to complete ln:{len(tasks)}")
+        txts = await asyncio.gather(*tasks)
+        print(f"GMP: sf_ tasks completed")
+        for txt in txts:
+            print(f"GMP: sf_ txt:{txt}")
+        await sess.close()
+        self.p_sf_matname = original_matname
+        self.p_sf_alt_matname = original_alt_matname
         return sfcount
 
     def GenerateMany(self):
@@ -178,6 +212,8 @@ class SphereFlakeFactory():
             nx = self.p_nsfx
             ny = self.p_nsfy
             nz = self.p_nsfz
+        self._createlist = []
+        self._bbcubelist = []
         sfcount = self.GenerateManySubcube(sx, sy, sz, nx, ny, nz)
         return sfcount
 
@@ -188,8 +224,6 @@ class SphereFlakeFactory():
         extentvec = self.GetSphereFlakeBoundingBox()
         count = self._count
 
-        self._createlist = []
-        self._bbcubelist = []
         for iix in range(nx):
             for iiy in range(ny):
                 for iiz in range(nz):
