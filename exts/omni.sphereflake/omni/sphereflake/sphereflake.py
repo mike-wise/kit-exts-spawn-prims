@@ -7,7 +7,7 @@ import math
 from pxr import Gf, Usd, UsdGeom, UsdShade
 from .spheremesh import SphereMeshFactory
 from . import ovut
-from .ovut import MatMan
+from .ovut import MatMan, get_setting, save_setting
 # import omni.services.client
 import aiohttp
 
@@ -60,6 +60,62 @@ class SphereFlakeFactory():
         self._smf.GenPrep()
         pass
 
+    def GetSettings(self):
+        print("SphereFlakeFactory.GetSettings")
+        self.p_genmode = get_setting("p_genmode", self.p_genmode)
+        self.p_genform = get_setting("p_genform", self.p_genform)
+        self.p_depth = get_setting("p_depth", self.p_depth)
+        self.p_rad = get_setting("p_rad", self.p_rad)
+        self.p_radratio = get_setting("p_radratio", self.p_radratio)
+        self.p_nsfx = get_setting("p_nsfx", self.p_nsfx, db=True)
+        self.p_nsfy = get_setting("p_nsfy", self.p_nsfy, db=True)
+        self.p_nsfz = get_setting("p_nsfz", self.p_nsfz, db=True)
+        self.p_partialRender = get_setting("p_partialRender", self.p_partialRender)
+        self.p_partial_ssfx = get_setting("p_partial_ssfx", self.p_partial_ssfx)
+        self.p_partial_ssfy = get_setting("p_partial_ssfy", self.p_partial_ssfy)
+        self.p_partial_ssfz = get_setting("p_partial_ssfz", self.p_partial_ssfz)
+        self.p_partial_nsfx = get_setting("p_partial_nsfx", self.p_partial_nsfx)
+        self.p_partial_nsfy = get_setting("p_partial_nsfy", self.p_partial_nsfy)
+        self.p_partial_nsfz = get_setting("p_partial_nsfz", self.p_partial_nsfz)
+        self.p_parallelRender = get_setting("p_parallelRender", self.p_parallelRender)
+        self.p_parallel_nxbatch = get_setting("p_parallel_nxbatch", self.p_parallel_nxbatch)
+        self.p_parallel_nybatch = get_setting("p_parallel_nybatch", self.p_parallel_nybatch)
+        self.p_parallel_nzbatch = get_setting("p_parallel_nzbatch", self.p_parallel_nzbatch)
+        self.p_sf_matname = get_setting("p_sf_matname", self.p_sf_matname)
+        self.p_sf_alt_matname = get_setting("p_sf_alt_matname", self.p_sf_alt_matname)
+        self.p_bb_matname = get_setting("p_bb_matname", self.p_bb_matname)
+        self.p_bb_matname = get_setting("p_bb_matname", self.p_bb_matname)
+        self.p_make_bounds_visible = get_setting("p_make_bounds_visible", self.p_make_bounds_visible)
+        print(f"SphereFlakeFactory.GetSettings: p_nsfx:{self.p_nsfx} p_nsfy:{self.p_nsfy} p_nsfz:{self.p_nsfz}")
+
+    def SaveSettings(self):
+        print("SphereFlakeFactory.SaveSettings")
+        save_setting("p_genmode", self.p_genmode)
+        save_setting("p_genform", self.p_genform)
+        save_setting("p_depth", self.p_depth)
+        save_setting("p_rad", self.p_rad)
+        save_setting("p_radratio", self.p_radratio)
+        save_setting("p_nsfx", self.p_nsfx)
+        save_setting("p_nsfy", self.p_nsfy)
+        save_setting("p_nsfz", self.p_nsfz)
+        save_setting("p_partialRender", self.p_partialRender)
+        save_setting("p_partial_ssfx", self.p_partial_ssfx)
+        save_setting("p_partial_ssfy", self.p_partial_ssfy)
+        save_setting("p_partial_ssfz", self.p_partial_ssfz)
+        save_setting("p_partial_nsfx", self.p_partial_nsfx)
+        save_setting("p_partial_nsfy", self.p_partial_nsfy)
+        save_setting("p_partial_nsfz", self.p_partial_nsfz)
+        save_setting("p_parallelRender", self.p_parallelRender)
+        save_setting("p_parallel_nxbatch", self.p_parallel_nxbatch)
+        save_setting("p_parallel_nybatch", self.p_parallel_nybatch)
+        save_setting("p_parallel_nzbatch", self.p_parallel_nzbatch)
+        save_setting("p_sf_matname", self.p_sf_matname)
+        save_setting("p_sf_alt_matname", self.p_sf_alt_matname)
+        save_setting("p_bb_matname", self.p_bb_matname)
+        save_setting("p_make_bounds_visible", self.p_make_bounds_visible)
+
+
+
     @staticmethod
     def GetGenModes():
         return ["UsdSphere", "DirectMesh", "AsyncMesh", "OmniSphere"]
@@ -95,11 +151,16 @@ class SphereFlakeFactory():
         totquads, totprims = self.CalcQuadsAndPrims()
         return totquads * 2, totprims
 
-    def GetCenterPosition(self, ix: int, nx: int, iy: int, ny: int,  iz: int, nz: int,
+    def GetCenterPosition(self, ix: int, iy: int, iz: int,
                           extentvec: Gf.Vec3f, gap: float = 1.1):
+        nx = self.p_nsfx
+        # ny = self.p_nsfy
+        nz = self.p_nsfz
+
         ixoff = (nx-1)/2
         iyoff = -0.28  # wierd offset to make it have the same height as single sphereflake
         izoff = (nz-1)/2
+
         x = (ix-ixoff) * extentvec[0] * gap * 2
         y = (iy-iyoff) * extentvec[1] * gap * 2
 #         y = extentvec[1]
@@ -121,7 +182,7 @@ class SphereFlakeFactory():
         UsdShade.MaterialBindingAPI(cube).Bind(mtl)
         return cube
 
-    def GetSphereFlakeBoundingBox(self):
+    def GetSphereFlakeBoundingBox(self) -> Gf.Vec3f:
         # sz = rad  +  (1+(radratio))**depth # old method
         sz = self.p_rad
         nrad = sz
@@ -129,6 +190,20 @@ class SphereFlakeFactory():
             nrad = self.p_radratio*nrad
             sz += 2*nrad
         return Gf.Vec3f(sz, sz, sz)
+
+    def GetSphereFlakeBoundingBoxNxNyNz(self, gap: float = 1.1) -> Gf.Vec3f:
+        # sz = rad  +  (1+(radratio))**depth # old method
+        ext = self.GetSphereFlakeBoundingBox()
+        fx = -1
+        fy = -1
+        fz = -1
+        lx = self.p_nsfx
+        ly = self.p_nsfy
+        lz = self.p_nsfz
+        lcorn = self.GetCenterPosition(fx, fy, fz, ext, gap)
+        rcorn = self.GetCenterPosition(lx, ly, lz, ext, gap)
+        rv = rcorn - lcorn
+        return rv
 
     async def fetch(self, session, url):
         async with session.get(url) as response:
@@ -234,7 +309,7 @@ class SphereFlakeFactory():
                     # primpath = f"/World/SphereFlake_{count}"
                     primpath = f"/World/SphereFlake_{ix}_{iy}_{iz}__{nx}_{ny}_{nz}"
 
-                    cpt = self.GetCenterPosition(ix, self.p_nsfx, iy, self.p_nsfy, iz, self.p_nsfz, extentvec)
+                    cpt = self.GetCenterPosition(ix, iy, iz, extentvec)
 
                     self.Generate(primpath, cpt)
                     self._createlist.append(primpath)

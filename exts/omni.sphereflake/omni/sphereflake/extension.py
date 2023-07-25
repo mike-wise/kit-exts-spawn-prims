@@ -22,7 +22,7 @@ def build_sf_set(sx: int = 0, nx: int = 1, nnx: int = 1,
     # to test open a browser at http://localhost:8211/docs or 8011 or maybe 8111
     stageid = omni.usd.get_context().get_stage_id()
     pid = os.getpid()
-    msg = f"build_sf_set - x: {sx} {nx} {nnx} - y: {sy} {ny} {nny} - z: {sz} {nz} {nnz} mat:{matname}"
+    msg = f"build_sf_set  - x: {sx} {nx} {nnx} - y: {sy} {ny} {nny} - z: {sz} {nz} {nnz} mat:{matname}"
     msg += f" - stageid: {stageid} pid:{pid}"
     print(msg)
     matman = MatMan()
@@ -47,6 +47,7 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
     _smf: SphereMeshFactory = None
     _sff: SphereFlakeFactory = None
     _sfc: SfControls = None
+    _settings = None
 
     def on_stage(self, ext_id):
         _stageid = omni.usd.get_context().get_stage_id()
@@ -74,6 +75,8 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
         self._matman = MatMan()
         self._smf = SphereMeshFactory(self._matman)
         self._sff = SphereFlakeFactory(self._matman, self._smf)
+        self._sff.GetSettings()
+
 
         # Controller objects
         self._sfc = SfControls(self._matman, self._smf, self._sff)
@@ -86,3 +89,4 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
         self._window_sfcon.destroy()
         self._window_sfcon = None
         main.deregister_endpoint("get", "/sphereflake/build-sf-set")
+

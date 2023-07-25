@@ -12,6 +12,7 @@ from .sphereflake import SphereFlakeFactory
 import nvidia_smi
 # import multiprocessing
 import subprocess
+import carb.settings
 # import asyncio
 
 # fflake8: noqa
@@ -85,8 +86,10 @@ class SfControls():
             prim: Usd.Prim = stage.GetPrimAtPath(ppathstr)
             UsdShade.MaterialBindingAPI(prim).Bind(mtl)
 
-            self._floor_xdim = extent3f[0] / 10
-            self._floor_zdim = extent3f[2] / 10
+            # self._floor_xdim = extent3f[0] / 10
+            # self._floor_zdim = extent3f[2] / 10
+            self._floor_xdim = extent3f[0] / 100
+            self._floor_zdim = extent3f[2] / 100
             okc.execute('TransformMultiPrimsSRTCpp',
                         count=1,
                         paths=[ppathstr],
@@ -111,14 +114,18 @@ class SfControls():
         #     extent3f = self.sff.GetSphereFlakeBoundingBox()
         #     self.setup_environment(extent3f)
 
-    def create_billboard(self, primpath: str):
+    def create_billboard(self, primpath: str, w: float = 860, h: float = 290):
         UsdGeom.SetStageUpAxis(self._stage, UsdGeom.Tokens.y)
 
         billboard = UsdGeom.Mesh.Define(self._stage, primpath)
-        billboard.CreatePointsAttr([(-430, -145, 0), (430, -145, 0), (430, 145, 0), (-430, 145, 0)])
+        w2 = w/2
+        h2 = h/2
+        pts = [(-w2, -h2, 0), (w2, -h2, 0), (w2, h2, 0), (-w2, h2, 0)]
+        ext = [(-w2, -h2, 0), (w2, h2, 0)]
+        billboard.CreatePointsAttr(pts)
         billboard.CreateFaceVertexCountsAttr([4])
         billboard.CreateFaceVertexIndicesAttr([0, 1, 2, 3])
-        billboard.CreateExtentAttr([(-430, -145, 0), (430, 145, 0)])
+        billboard.CreateExtentAttr(ext)
         texCoords = UsdGeom.PrimvarsAPI(billboard).CreatePrimvar("st", Sdf.ValueTypeNames.TexCoord2fArray,
                                                                  UsdGeom.Tokens.varying)
         texCoords.Set([(0, 0), (1, 0), (1, 1), (0, 1)])
@@ -217,6 +224,7 @@ class SfControls():
             new_count = sff.GenerateMany()
 
         self._count += new_count
+        sff.SaveSettings()
 
     def write_log(self, elap: float = 0.0):
         if self.p_writelog:
@@ -259,7 +267,8 @@ class SfControls():
 
     async def on_click_multi_sphereflake(self):
         self.ensure_stage()
-        extent3f = self.sff.GetSphereFlakeBoundingBox()
+        # extent3f = self.sff.GetSphereFlakeBoundingBox()
+        extent3f = self.sff.GetSphereFlakeBoundingBoxNxNyNz()
         self.setup_environment(extent3f, force=True)
 
         start_time = time.time()
@@ -275,14 +284,15 @@ class SfControls():
 
     def spawnprim(self, primtype):
         self.ensure_stage()
+        extent3f = self.sff.GetSphereFlakeBoundingBox()
+        self.setup_environment(extent3f, force=True)
+
         if primtype == "Billboard":
             self.on_click_billboard()
             return
         elif primtype == "SphereMesh":
             self.on_click_spheremesh()
             return
-        extent3f = self.sff.GetSphereFlakeBoundingBox()
-        self.setup_environment(extent3f, force=True)
 
         primpath = f"/World/Prim_{primtype}_{self._count}"
         okc.execute('CreateMeshPrimWithDefaultXform', prim_type=primtype, prim_path=primpath)

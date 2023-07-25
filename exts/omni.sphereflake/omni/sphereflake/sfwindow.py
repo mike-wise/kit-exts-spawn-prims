@@ -14,6 +14,7 @@ class SfcWindow(ui.Window):
     darkyellow = clr("#404000")
     darkpurple = clr("#400040")
     darkcyan = clr("#004040")
+    darkcyan = clr("#004040")
 
     marg = 2
 

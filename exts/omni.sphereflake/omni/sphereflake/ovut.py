@@ -6,6 +6,36 @@ import math
 
 from pxr import Gf, Sdf, UsdShade
 from typing import Tuple, List
+import carb.settings
+
+
+_settings = None
+
+
+def _init_settings():
+    global _settings
+    if _settings is None:
+        _settings = carb.settings.get_settings()
+    return _settings
+
+
+def get_setting(name, default, db=False):
+    settings = _init_settings()
+    val = settings.get(name)
+    if db:
+        oval = val
+        if oval is None:
+            oval = "None"
+    if val is None:
+        val = default
+    if db:
+        print(f"GetSettings {name} {oval} {val}")
+    return val
+
+
+def save_setting(name, value):
+    settings = _init_settings()
+    settings.set(name, value)
 
 
 def truncf(number, digits) -> float:
