@@ -43,6 +43,7 @@ class SfcWindow(ui.Window):
         self.smf = self.sfc.smf
         self.sff = self.sfc.sff
         self.BuildWindow()
+        self.sfc.LateInit()
 
     def BuildWindow(self):
         sfc = self.sfc
@@ -62,9 +63,7 @@ class SfcWindow(ui.Window):
                 ui.Button("Clear Primitives",
                           style={'background_color': self.darkyellow},
                           clicked_fn=lambda: sfc.on_click_clearprims())
-                ui.Button("Launch Xproc",
-                          style={'background_color': self.darkgreen},
-                          clicked_fn=lambda: sfc.on_click_launchxproc())
+
 
     def on_close(self):
         pass

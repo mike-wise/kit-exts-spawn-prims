@@ -229,8 +229,10 @@ class SphereFlakeFactory():
         self._createlist = []
         self._bbcubelist = []
         tasks = []
-        baseurl = "http://localhost:8211/sphereflake/build-sf-set"
-        sess = aiohttp.ClientSession()
+        doremote = True
+        if doremote:
+            baseurl = "http://localhost:8211/sphereflake/build-sf-set"
+            sess = aiohttp.ClientSession()
         for iix in range(self.p_parallel_nxbatch):
             for iiy in range(self.p_parallel_nybatch):
                 for iiz in range(self.p_parallel_nzbatch):
@@ -252,22 +254,24 @@ class SphereFlakeFactory():
                     nx = min(nx, nnx-sx)
                     ny = min(ny, nny-sy)
                     nz = min(nz, nnz-sz)
-                    url = f"{baseurl}?matname={self.p_sf_matname}"
-                    url += f"&sx={sx}&nx={nx}&nnx={nnx}"
-                    url += f"&sy={sy}&ny={ny}&nny={nny}"
-                    url += f"&sz={sz}&nz={nz}&nnz={nnz}"
-                    t = asyncio.create_task(self.fetch(sess, url))
-                    t.add_done_callback(tasks.remove)
-                    tasks.append(t)
-                    print(f"GMP sf_ - url:{url}")
+                    if doremote:
+                        url = f"{baseurl}?matname={self.p_sf_matname}"
+                        url += f"&sx={sx}&nx={nx}&nnx={nnx}"
+                        url += f"&sy={sy}&ny={ny}&nny={nny}"
+                        url += f"&sz={sz}&nz={nz}&nnz={nnz}"
+                        t = asyncio.create_task(self.fetch(sess, url))
+                        t.add_done_callback(tasks.remove)
+                        tasks.append(t)
+                        print(f"GMP sf_ - url:{url}")
                     sfcount += self.GenerateManySubcube(sx, sy, sz, nx, ny, nz)
                     ibatch += 1
-        print(f"GMP: sf_ waiting for tasks to complete ln:{len(tasks)}")
-        txts = await asyncio.gather(*tasks)
-        print(f"GMP: sf_ tasks completed")
-        for txt in txts:
-            print(f"GMP: sf_ txt:{txt}")
-        await sess.close()
+        if doremote:
+            print(f"GMP: sf_ waiting for tasks to complete ln:{len(tasks)}")
+            txts = await asyncio.gather(*tasks)
+            print(f"GMP: sf_ tasks completed")
+            for txt in txts:
+                print(f"GMP: sf_ txt:{txt}")
+            await sess.close()
         self.p_sf_matname = original_matname
         self.p_sf_alt_matname = original_alt_matname
         return sfcount

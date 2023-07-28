@@ -21,7 +21,8 @@ def _init_settings():
 
 def get_setting(name, default, db=False):
     settings = _init_settings()
-    val = settings.get(name)
+    key = f"/persistent/omni/sphereflake/{name}"
+    val = settings.get(key)
     if db:
         oval = val
         if oval is None:
@@ -35,7 +36,8 @@ def get_setting(name, default, db=False):
 
 def save_setting(name, value):
     settings = _init_settings()
-    settings.set(name, value)
+    key = f"/persistent/omni/sphereflake/{name}"
+    settings.set(key, value)
 
 
 def truncf(number, digits) -> float:

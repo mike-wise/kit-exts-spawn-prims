@@ -12,10 +12,32 @@ from .sphereflake import SphereFlakeFactory
 import nvidia_smi
 # import multiprocessing
 import subprocess
-import carb.settings
+from omni.services.core import main
+import os
 # import asyncio
 
 # fflake8: noqa
+
+
+def build_sf_set(sx: int = 0, nx: int = 1, nnx: int = 1,
+                 sy: int = 0, ny: int = 1, nny: int = 1,
+                 sz: int = 0, nz: int = 1, nnz: int = 1,
+                 matname: str = "Mirror"):
+    # to test open a browser at http://localhost:8211/docs or 8011 or maybe 8111
+    stageid = omni.usd.get_context().get_stage_id()
+    pid = os.getpid()
+    msg = f"build_sf_set  - x: {sx} {nx} {nnx} - y: {sy} {ny} {nny} - z: {sz} {nz} {nnz} mat:{matname}"
+    msg += f" - stageid: {stageid} pid:{pid}"
+    print(msg)
+    matman = MatMan()
+    smf = SphereMeshFactory(matman)
+    sff = SphereFlakeFactory(matman, smf)
+    sff.p_sf_matname = matname
+    sff.p_nsfx = nnx
+    sff.p_nsfy = nny
+    sff.p_nsfz = nnz
+    # sff.GenerateManySubcube(sx, sy, sz, nx, ny, nz)
+    return msg
 
 
 # Any class derived from `omni.ext.IExt` in top level module (defined in `python.modules` of `extension.toml`) will be
@@ -67,6 +89,22 @@ class SfControls():
 
         if self._write_out_syspath:
             write_out_syspath()
+
+    def LateInit(self):
+        # Register endpoints
+        try:
+            # there seems to be no main until a window is created
+            main.register_endpoint("get", "/sphereflake/build-sf-set", build_sf_set, tags=["Sphereflakes"])
+        except Exception as e:
+            print(f"Exception registering endpoint: {e}")
+
+    def Close(self):
+        try:
+            main.deregister_endpoint("get", "/sphereflake/build-sf-set")
+        except Exception as e:
+            print(f"Exception deregistering endpoint: {e}")
+
+        print("SfControls close")
 
     def setup_environment(self, extent3f: Gf.Vec3f,  force: bool = False):
         ppathstr = "/World/Floor"
@@ -133,7 +171,7 @@ class SfControls():
 
         self.ensure_stage()
 
-# Todo:
+# Tore:
 # Remove _sf_size into smf (and sff?)
 
     # def get_bool_model(self, option_name: str):
