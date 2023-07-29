@@ -14,6 +14,8 @@ import nvidia_smi
 import subprocess
 from omni.services.core import main
 import os
+from .ovut import get_setting, save_setting
+
 # import asyncio
 
 # fflake8: noqa
@@ -56,7 +58,7 @@ class SfControls():
     _vsc_test8 = False
     sfw = None  # We can't give this a type because it would be a circular reference
     p_writelog = True
-    p_seriesname = "None"
+    p_logseriesname = "None"
 
     def __init__(self, matman: MatMan, smf: SphereMeshFactory, sff: SphereFlakeFactory):
         print("SfControls __init__")
@@ -90,6 +92,8 @@ class SfControls():
         if self._write_out_syspath:
             write_out_syspath()
 
+        self.GetSettings()
+
     def LateInit(self):
         # Register endpoints
         try:
@@ -105,6 +109,14 @@ class SfControls():
             print(f"Exception deregistering endpoint: {e}")
 
         print("SfControls close")
+
+    def SaveSettings(self):
+        save_setting("write_log", self.p_writelog)
+        save_setting("log_series_name", self.p_logseriesname)
+
+    def GetSettings(self):
+        self.p_writelog = get_setting("write_log", True)
+        self.p_logseriesname = get_setting("log_series_name", "None")
 
     def setup_environment(self, extent3f: Gf.Vec3f,  force: bool = False):
         ppathstr = "/World/Floor"
@@ -181,6 +193,12 @@ class SfControls():
     def toggle_write_log(self):
         self.p_writelog = not self.p_writelog
         print(f"toggle_write_log is now:{self.p_writelog}")
+
+    def query_write_log(self):
+        self.p_writelog = self.sfw.writelog_checkbox_model.as_bool
+        self.p_logseriesname = self.sfw.writelog_seriesname_model.as_string
+        self.SaveSettings()
+        print(f"querey_write_log is now:{self.p_writelog} name:{self.p_logseriesname}")
 
     def toggle_bounds(self):
         self.ensure_stage()
@@ -265,6 +283,7 @@ class SfControls():
         sff.SaveSettings()
 
     def write_log(self, elap: float = 0.0):
+        self.query_write_log()
         if self.p_writelog:
             nflakes = self.sff.p_nsfx * self.sff.p_nsfz
             ntris, nprims = self.sff.CalcTrisAndPrims()
@@ -278,7 +297,7 @@ class SfControls():
             # msg = f"GPU Mem tot:  {gpuinfo.total/om:.2f}: used: {gpuinfo.used/om:.2f} free: {gpuinfo.free/om:.2f} GB"
             # msg += f"\nCPU cores: {cores}"
             # msg += f"\nSys Mem tot: {memtot/om:.2f}: used: {memused/om:.2f} free: {memfree/om:.2f} GB"
-            rundict = {"0-seriesname": self.p_seriesname,
+            rundict = {"0-seriesname": self.p_logseriesname,
                        "0-hostname": hostname,
                        "0-date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                        "1-genmode": self.sff.p_genmode,

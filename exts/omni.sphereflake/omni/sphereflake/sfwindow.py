@@ -1,9 +1,11 @@
+import carb.events
 import omni.ui as ui
 from omni.ui import color as clr
 import asyncio
 from ._widgets import TabGroup, BaseTab
 from .sphereflake import SphereMeshFactory, SphereFlakeFactory
 from .sfcontrols import SfControls
+from .ovut import get_setting, save_setting
 
 
 class SfcWindow(ui.Window):
@@ -36,12 +38,24 @@ class SfcWindow(ui.Window):
     smf: SphereMeshFactory
     sff: SphereFlakeFactory
 
+    prframe: ui.CollapsableFrame = None
+    drframe: ui.CollapsableFrame = None
+
+    docollapse_prframe = False
+    docollapse_drframe = False
+
+    writelog_checkbox: ui.CheckBox = None
+    writelog_checkbox_model = None
+    writelog_seriesname: ui.StringField = None
+    writelog_seriesname_model = None
+
     def __init__(self, *args, **kwargs):
         super().__init__(title="SphereFlake Controls", height=300, width=300,  *args, **kwargs)
         self.sfc = kwargs["sfc"]
         self.sfc.sfw = self  # intentionally circular
         self.smf = self.sfc.smf
         self.sff = self.sfc.sff
+        self.GetSettings()
         self.BuildWindow()
         self.sfc.LateInit()
 
@@ -52,39 +66,48 @@ class SfcWindow(ui.Window):
         print(f"SfcWindow.BuildWindow {type(sfc)}")
         with self.frame:
             with ui.VStack():
-                t1 = SfcTab1("Multi", self, sfc)
-                t2 = SfcTab2("SphereFlake", self, sfc)
-                t3 = SfcTab3("Shapes", self, sfc)
-                t4 = SfcTab4("Materials", self, sfc)
-                t5 = SfcTab5("Options", self, sfc)
+                t1 = SfcTabMulti(self)
+                t2 = SfcTabSphereFlake(self)
+                t3 = SfcTabShapes(self)
+                t4 = SfcTabMaterials(self)
+                t5 = SfcTabOptions(self)
                 self.tab_group = TabGroup([t1, t2, t3, t4, t5])
                 self._statuslabel = ui.Label("Status: Ready")
                 self._memlabel = ui.Button("Memory tot/used/free", clicked_fn=sfc.UpdateGpuMemory)
                 ui.Button("Clear Primitives",
                           style={'background_color': self.darkyellow},
                           clicked_fn=lambda: sfc.on_click_clearprims())
+        self.dock_in_window("Property", ui._ui.DockPosition.SAME)
+
+    def GetSettings(self):
+        # print("SfcWindow.GetSettings")
+        self.docollapse_prframe = get_setting("ui_pr_frame_collapsed", False)
+        self.docollapse_drframe = get_setting("ui_dr_frame_collapsed", False)
+        # print(f"docollapse_prframe: {self.docollapse_prframe} docollapse_drframe: {self.docollapse_drframe}")
+
+    def SaveSettings(self):
+        # print("SfcWindow.SaveSettings")
+        save_setting("ui_pr_frame_collapsed", self.prframe.collapsed)
+        save_setting("ui_dr_frame_collapsed", self.drframe.collapsed)
+        # print(f"docollapse_prframe: {self.prframe.collapsed} docollapse_drframe: {self.drframe.collapsed}")
 
 
-    def on_close(self):
-        pass
-
-
-class SfcTab1(BaseTab):
+class SfcTabMulti(BaseTab):
 
     sfw: SfcWindow
     sfc: SfControls
 
-    def __init__(self, name: str, sfw: SfcWindow, sfc: SfControls):
-        super().__init__(name)
+    def __init__(self, sfw: SfcWindow):
+        super().__init__("Multi")
         self.sfw = sfw
-        self.sfc = sfc
-        # print(f"SfcTab1.init {type(sfc)}")
+        self.sfc = sfw.sfc
+        # print(f"SfcTabMulti.init {type(sfc)}")
 
     def build_fn(self):
         sfw: SfcWindow = self.sfw
         sfc: SfControls = self.sfc
         sff: SphereFlakeFactory = self.sfw.sff
-        # print(f"SfcTab1.build_fn {type(sfc)}")
+        # print(f"SfcTabMulti.build_fn {type(sfc)}")
         with ui.VStack(style={"margin": sfw.marg}):
             with ui.VStack():
                 with ui.HStack():
@@ -108,7 +131,8 @@ class SfcTab1(BaseTab):
                     sfw._tog_bounds_but = ui.Button(f"Bounds:{sfc._bounds_visible}",
                                                     style={'background_color': sfw.darkcyan},
                                                     clicked_fn=sfc.toggle_bounds)
-                with ui.CollapsableFrame("Partial Renders"):
+                sfw.prframe = ui.CollapsableFrame("Partial Renders", collapsed=sfw.docollapse_prframe)
+                with sfw.prframe:
                     with ui.VStack():
                         sfw._partial_render_but = ui.Button(f"Partial Render {sff.p_partialRender}",
                                                             style={'background_color': sfw.darkcyan},
@@ -139,9 +163,10 @@ class SfcTab1(BaseTab):
                             sfw._part_nsf_nz_but = ui.Button(f"SF partial nz: {sff.p_partial_nsfz}",
                                                              style={'background_color': sfw.darkblue},
                                                              mouse_pressed_fn=clkfn)
-                with ui.CollapsableFrame("Parallel Renders"):
+                sfw.drframe = ui.CollapsableFrame("Distributed Renders", collapsed=sfw.docollapse_drframe)
+                with sfw.drframe:
                     with ui.VStack():
-                        sfw._parallel_render_but = ui.Button(f"Parallel Render {sff.p_parallelRender}",
+                        sfw._parallel_render_but = ui.Button(f"Distributed Render {sff.p_parallelRender}",
                                                              style={'background_color': sfw.darkcyan},
                                                              clicked_fn=sfc.toggle_parallel_render)
                         with ui.HStack():
@@ -159,21 +184,21 @@ class SfcTab1(BaseTab):
                                                                   mouse_pressed_fn=clkfn)
 
 
-class SfcTab2(BaseTab):
+class SfcTabSphereFlake(BaseTab):
 
     sfc: SfControls = None
 
-    def __init__(self, name: str, sfw: SfcWindow, sfc: SfControls):
-        super().__init__(name)
+    def __init__(self, sfw: SfcWindow):
+        super().__init__("SphereFlake")
         self.sfw = sfw
-        self.sfc = sfc
+        self.sfc = sfw.sfc
 
     def build_fn(self):
         sfw = self.sfw
         sfc = self.sfc
         sff = self.sfw.sff
         smf = self.sfw.smf
-        # print(f"SfcTab2.build_fn sfc:{type(sfc)} ")
+        # print(f"SfcTabMulti.build_fn sfc:{type(sfc)} ")
 
         with ui.VStack(style={"margin": sfw.marg}):
 
@@ -218,20 +243,20 @@ class SfcTab2(BaseTab):
                                                      lambda x, y, b, m: sfc.on_click_nlng(x, y, b, m))
 
 
-class SfcTab3(BaseTab):
+class SfcTabShapes(BaseTab):
 
     sfw: SfcWindow
     sfc: SfControls
 
-    def __init__(self, name: str, sfw: SfcWindow, sfc: SfControls):
-        super().__init__(name)
+    def __init__(self, sfw: SfcWindow):
+        super().__init__("Shapes")
         self.sfw = sfw
-        self.sfc = sfc
+        self.sfc = sfw.sfc
 
     def build_fn(self):
         sfc = self.sfc
         sfw = self.sfw
-        # print(f"SfcTab3.build_fn {type(sfc)}")
+        # print(f"SfcTabShapes.build_fn {type(sfc)}")
 
         with ui.VStack(style={"margin": sfw.marg}):
 
@@ -244,15 +269,15 @@ class SfcTab3(BaseTab):
                                                     clicked_fn=lambda: sfc.on_click_changeprim())
 
 
-class SfcTab4(BaseTab):
+class SfcTabMaterials(BaseTab):
     sfw: SfcWindow
     sfc: SfControls
 
-    def __init__(self, name: str, sfw: SfcWindow, sfc: SfControls):
-        super().__init__(name)
+    def __init__(self, sfw: SfcWindow):
+        super().__init__("Materials")
         self.sfw = sfw
-        self.sfc = sfc
-        # print("SfcTab4.build_fn {sfc}")
+        self.sfc = sfw.sfc
+        # print("SfcTabMaterials.build_fn {sfc}")
 
     def build_fn(self):
         sfw = self.sfw
@@ -287,24 +312,28 @@ class SfcTab4(BaseTab):
                 sfw._sf_floor_matbox = ui.ComboBox(idx, *sfc._matkeys).model
 
 
-class SfcTab5(BaseTab):
+class SfcTabOptions(BaseTab):
     sfw: SfcWindow
     sfc: SfControls
 
-    def __init__(self, name: str, sfw: SfcWindow, sfc: SfControls):
-        super().__init__(name)
+    def __init__(self, sfw: SfcWindow):
+        super().__init__("Options")
         self.sfw = sfw
-        self.sfc = sfc
-        # print("SfcTab5.build_fn {sfc}")
+        self.sfc = sfw.sfc
+        # print("SfcTabOptions.build_fn {sfc}")
 
     def build_fn(self):
         sfw = self.sfw
         sfc = self.sfc # noqa : F841
 
         with ui.VStack(style={"margin": sfw.marg}):
-            ui.CheckBox(model=sfc.get_bool_model("writelog"), width=40, height=10, name="writelog", visible=True)
-
-            with ui.CollapsableFrame("Logging", style={'background_color': sfw.darkcyan}):
-                with ui.HStack():
-                    sfw._sf_writerunlog_but = ui.Button(f"Write Perf Log: {sfc.p_writelog}",
-                                                        clicked_fn=lambda: sfc.on_click_writerunlog())
+            with ui.HStack():
+                ui.Label("Write Perf Log: ")
+                bmod = ui.SimpleBoolModel(sfc.p_writelog)
+                sfw.writelog_checkbox = ui.CheckBox(model=bmod, width=40, height=10, name="writelog", visible=True)
+                sfw.writelog_checkbox_model = sfw.writelog_checkbox.model
+            with ui.HStack():
+                ui.Label("Log Series Name:")
+                smod = ui.SimpleStringModel(sfc.p_logseriesname)
+                sfw.writelog_seriesname = ui.StringField(model=smod, value="Tag", width=200, height=20, visible=True)
+                sfw.writelog_seriesname_model = sfw.writelog_seriesname.model

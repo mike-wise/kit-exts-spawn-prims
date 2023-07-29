@@ -25,14 +25,15 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
     _smf: SphereMeshFactory = None
     _sff: SphereFlakeFactory = None
     _sfc: SfControls = None
+    _sfw: SfcWindow = None
     _settings = None
 
-    def on_stage(self, ext_id):
-        _stageid = omni.usd.get_context().get_stage_id()
-        self._stageid = _stageid
-        pid = os.getpid()
-        print(f"[omni.sphereflake] SphereflakeBenchmarkExtension on_stage - stageid: {_stageid} pid:{pid}")
-        self._window_sfcon.ensure_stage()
+    # def on_stage(self, ext_id):
+    #     _stageid = omni.usd.get_context().get_stage_id()
+    #     self._stageid = _stageid
+    #     pid = os.getpid()
+    #     print(f"[omni.sphereflake] SphereflakeBenchmarkExtension on_stage - stageid: {_stageid} pid:{pid}")
+    #     self._window_sfcon.ensure_stage()
 
     def WriteOutPathAndSysPath(self, basename="d:/nv/ov/sphereflake_benchmark"):
         write_out_syspath(f"{basename}_syspath.txt")
@@ -56,10 +57,12 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
         self._sfc = SfControls(self._matman, self._smf, self._sff)
 
         # View objects
-        self._window_sfcon = SfcWindow(sfc=self._sfc)
+        self._sfw = SfcWindow(sfc=self._sfc)
+        print("[omni.sphereflake] SphereflakeBenchmarkExtension on_startup - done")
 
     def on_shutdown(self):
         print("[omni.sphereflake] SphereflakeBenchmarkExtension no_shutdown")
-        self._window_sfcon.destroy()
-        self._window_sfcon = None
+        self._sfc.SaveSettings()
+        self._sfw.SaveSettings()
         self._sfc.Close()
+        self._sfw.destroy()
