@@ -30,7 +30,7 @@ def get_setting(name, default, db=False):
     if val is None:
         val = default
     if db:
-        print(f"GetSettings {name} {oval} {val}")
+        print(f"get_setting {name} {oval} {val}")
     return val
 
 

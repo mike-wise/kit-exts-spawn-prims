@@ -61,7 +61,7 @@ class SfControls():
     p_logseriesname = "None"
 
     def __init__(self, matman: MatMan, smf: SphereMeshFactory, sff: SphereFlakeFactory):
-        print("SfControls __init__")
+        print("SfControls __init__ (trc)")
 
         self._matman = matman
         self._count = 0
@@ -92,7 +92,7 @@ class SfControls():
         if self._write_out_syspath:
             write_out_syspath()
 
-        self.GetSettings()
+        self.LoadSettings()
 
     def LateInit(self):
         # Register endpoints
@@ -111,10 +111,13 @@ class SfControls():
         print("SfControls close")
 
     def SaveSettings(self):
+        print("SfControls SaveSettings (trc)")
+        self.query_write_log()
         save_setting("write_log", self.p_writelog)
         save_setting("log_series_name", self.p_logseriesname)
 
-    def GetSettings(self):
+    def LoadSettings(self):
+        print("SfControls LoadSettings (trc)")
         self.p_writelog = get_setting("write_log", True)
         self.p_logseriesname = get_setting("log_series_name", "None")
 
@@ -197,7 +200,6 @@ class SfControls():
     def query_write_log(self):
         self.p_writelog = self.sfw.writelog_checkbox_model.as_bool
         self.p_logseriesname = self.sfw.writelog_seriesname_model.as_string
-        self.SaveSettings()
         print(f"querey_write_log is now:{self.p_writelog} name:{self.p_logseriesname}")
 
     def toggle_bounds(self):
@@ -227,8 +229,8 @@ class SfControls():
         self.smf.CreateMesh(primpath, matname, cpt, self._sf_size)
 
     def update_radratio(self):
-        if self.sfw._sf_radratio_slider is not None:
-            val = self.sfw._sf_radratio_slider.get_value_as_float()
+        if self.sfw._sf_radratio_slider_model is not None:
+            val = self.sfw._sf_radratio_slider_model.as_float
             self.sff.p_radratio = val
 
     def on_click_sphereflake(self):
@@ -560,63 +562,51 @@ class SfControls():
         self.sfw._memlabel.text = msg
 
     def get_curmat_mat(self):
-        if self.sfw._sf_matbox is not None:
-            idx = self.sfw._sf_matbox.get_item_value_model().as_int
-            self._current_material_name = self._matkeys[idx]
+        idx = self.sfw._sf_matbox_model.as_int
+        self._current_material_name = self._matkeys[idx]
         return self._matman.GetMaterial(self._current_material_name)
 
     def get_curmat_name(self):
-        if self.sfw._sf_matbox is not None:
-            idx = self.sfw._sf_matbox.get_item_value_model().as_int
-            self._current_material_name = self._matkeys[idx]
+        idx = self.sfw._sf_matbox_model.as_int
+        self._current_material_name = self._matkeys[idx]
         return self._current_material_name
 
     def get_curaltmat_mat(self):
-        if self.sfw._sf_alt_matbox is not None:
-            idx = self.sfw._sf_alt_matbox.get_item_value_model().as_int
-            self._current_alt_material_name = self._matkeys[idx]
+        idx = self.sfw._sf_alt_matbox_model.as_int
+        self._current_alt_material_name = self._matkeys[idx]
         return self._matman.GetMaterial(self._current_alt_material_name)
 
     def get_curaltmat_name(self):
-        if self.sfw._sf_alt_matbox is not None:
-            idx = self.sfw._sf_alt_matbox.get_item_value_model().as_int
-            self._current_alt_material_name = self._matkeys[idx]
+        idx = self.sfw._sf_alt_matbox_model.as_int
+        self._current_alt_material_name = self._matkeys[idx]
         return self._current_alt_material_name
 
     def get_curfloormat_mat(self):
-        if self.sfw._sf_floor_matbox is not None:
-            idx = self.sfw._sf_floor_matbox.get_item_value_model().as_int
-            self._current_floor_material_name = self._matkeys[idx]
+        idx = self.sfw._sf_floor_matbox_model.as_int
+        self._current_floor_material_name = self._matkeys[idx]
         return self._matman.GetMaterial(self._current_floor_material_name)
 
-    def get_curfloormat_name(self):
-        if self.sfw._sf_floor_matbox is not None:
-            idx = self.sfw._sf_floor_matbox.get_item_value_model().as_int
-            self._current_floor_material_name = self._matkeys[idx]
-        return self._current_floor_material_name
-
     def get_curmat_bbox_name(self):
-        if self.sfw._bb_matbox is not None:
-            idx = self.sfw._bb_matbox.get_item_value_model().as_int
-            self._current_bbox_material_name = self._matkeys[idx]
+        idx = self.sfw._bb_matbox_model.as_int
+        self._current_bbox_material_name = self._matkeys[idx]
         return self._current_bbox_material_name
 
     def get_curmat_bbox_mat(self):
-        if self.sfw._bb_matbox is not None:
-            idx = self.sfw._bb_matbox.get_item_value_model().as_int
-            self._current_bbox_material_name = self._matkeys[idx]
+        idx = self.sfw._bb_matbox_model.as_int
+        self._current_bbox_material_name = self._matkeys[idx]
         return self._matman.GetMaterial(self._current_bbox_material_name)
 
+    def get_curfloormat_name(self):
+        idx = self.sfw._sf_floor_matbox_model.as_int
+        self._current_floor_material_name = self._matkeys[idx]
+        return self._current_floor_material_name
+
     def get_sf_genmode(self):
-        if self.sfw._genmodebox is None:
-            return self._sf_gen_modes[0]
-        idx = self.sfw._genmodebox.get_item_value_model().as_int
+        idx = self.sfw._genmodebox_model.as_int
         return self._sf_gen_modes[idx]
 
     def get_sf_genform(self):
-        if self.sfw._genformbox is None:
-            return self._sf_gen_forms[0]
-        idx = self.sfw._genformbox.get_item_value_model().as_int
+        idx = self.sfw._genformbox_model.as_int
         return self._sf_gen_forms[idx]
 
     def WriteRunLog(self, rundict=None):

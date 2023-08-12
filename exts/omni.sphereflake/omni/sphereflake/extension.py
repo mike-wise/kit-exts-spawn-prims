@@ -28,12 +28,13 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
     _sfw: SfcWindow = None
     _settings = None
 
-    # def on_stage(self, ext_id):
-    #     _stageid = omni.usd.get_context().get_stage_id()
-    #     self._stageid = _stageid
-    #     pid = os.getpid()
-    #     print(f"[omni.sphereflake] SphereflakeBenchmarkExtension on_stage - stageid: {_stageid} pid:{pid}")
-    #     self._window_sfcon.ensure_stage()
+    def on_stage(self, ext_id):
+        print(f"[omni.sphereflake] SphereflakeBenchmarkExtension on_stage - ext_id: {ext_id} (trc)")
+        _stageid = omni.usd.get_context().get_stage_id()
+        self._stageid = _stageid
+        pid = os.getpid()
+        print(f"[omni.sphereflake] SphereflakeBenchmarkExtension on_stage - stageid: {_stageid} pid:{pid} (trc)")
+        self._window_sfcon.ensure_stage()
 
     def WriteOutPathAndSysPath(self, basename="d:/nv/ov/sphereflake_benchmark"):
         write_out_syspath(f"{basename}_syspath.txt")
@@ -42,7 +43,7 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
     def on_startup(self, ext_id):
         self._stageid = omni.usd.get_context().get_stage_id()
         pid = os.getpid()
-        print(f"[omni.sphereflake] SphereflakeBenchmarkExtension on_startup - stageid:{self._stageid} pid:{pid}")
+        print(f"[omni.sphereflake] SphereflakeBenchmarkExtension on_startup - stageid:{self._stageid} pid:{pid} (trc)")
 
         # Write out syspath and path
         # self.WriteOutPathAndSysPath()
@@ -51,17 +52,18 @@ class SphereflakeBenchmarkExtension(omni.ext.IExt):
         self._matman = MatMan()
         self._smf = SphereMeshFactory(self._matman)
         self._sff = SphereFlakeFactory(self._matman, self._smf)
-        self._sff.GetSettings()
+        self._sff.LoadSettings()
 
         # Controller objects
         self._sfc = SfControls(self._matman, self._smf, self._sff)
 
         # View objects
         self._sfw = SfcWindow(sfc=self._sfc)
-        print("[omni.sphereflake] SphereflakeBenchmarkExtension on_startup - done")
+        self._sfw.DockWindow()
+        print("[omni.sphereflake] SphereflakeBenchmarkExtension on_startup - done (trc))")
 
     def on_shutdown(self):
-        print("[omni.sphereflake] SphereflakeBenchmarkExtension no_shutdown")
+        print("[omni.sphereflake] SphereflakeBenchmarkExtension on_shutdown (trc)")
         self._sfc.SaveSettings()
         self._sfw.SaveSettings()
         self._sfc.Close()

@@ -16,54 +16,100 @@ class SfcWindow(ui.Window):
     darkyellow = clr("#404000")
     darkpurple = clr("#400040")
     darkcyan = clr("#004040")
-    darkcyan = clr("#004040")
 
     marg = 2
 
-    _sf_depth_but: ui.Button = None
-    _sf_spawn_but: ui.Button = None
-    _sf_nlat_but: ui.Button = None
-    _sf_nlng_but: ui.Button = None
-    _sf_radratio_slider: ui.FloatSlider = None
+    # Status
     _statuslabel: ui.Label = None
     _memlabel: ui.Label = None
-    _sf_matbox: ui.ComboBox = None
-    _sf_alt_matbox: ui.ComboBox = None
-    _bb_matbox: ui.ComboBox = None
-    _sf_floor_matbox: ui.ComboBox = None
-    _genmodebox: ui.ComboBox = None
-    _genformbox: ui.ComboBox = None
 
-    sfc: SfControls
-    smf: SphereMeshFactory
-    sff: SphereFlakeFactory
-
+    # Sphereflake params
     prframe: ui.CollapsableFrame = None
     drframe: ui.CollapsableFrame = None
 
     docollapse_prframe = False
     docollapse_drframe = False
 
+    _sf_depth_but: ui.Button = None
+    _sf_spawn_but: ui.Button = None
+    _sf_nlat_but: ui.Button = None
+    _sf_nlng_but: ui.Button = None
+    _sf_radratio_slider_model: ui.SimpleFloatModel = None
+
+    _genmodebox: ui.ComboBox = None
+    _genmodebox_model: ui.SimpleIntModel = None
+
+    _genformbox: ui.ComboBox = None
+    _genformbox_model: ui.SimpleIntModel = None
+
+    # Material tab
+    _sf_matbox: ui.ComboBox = None
+    _sf_matbox_model: ui.SimpleIntModel = None
+
+    _sf_alt_matbox: ui.ComboBox = None
+    _sf_alt_matbox_model: ui.SimpleIntModel = None
+
+    _bb_matbox: ui.ComboBox = None
+    _bb_matbox_model: ui.SimpleIntModel = None
+
+    _sf_floor_matbox: ui.ComboBox = None
+    _sf_floor_matbox_model: ui.SimpleIntModel = None
+
+    # Options
     writelog_checkbox: ui.CheckBox = None
     writelog_checkbox_model = None
     writelog_seriesname: ui.StringField = None
     writelog_seriesname_model = None
 
+    # state
+    sfc: SfControls
+    smf: SphereMeshFactory
+    sff: SphereFlakeFactory
+
     def __init__(self, *args, **kwargs):
         super().__init__(title="SphereFlake Controls", height=300, width=300,  *args, **kwargs)
+        print(f"SfcWindow.__init__ (trc)")
         self.sfc = kwargs["sfc"]
         self.sfc.sfw = self  # intentionally circular
         self.smf = self.sfc.smf
         self.sff = self.sfc.sff
-        self.GetSettings()
+        self.LoadSettings()
+        self.BuildControlModels()
         self.BuildWindow()
         self.sfc.LateInit()
 
-    def BuildWindow(self):
+    def BuildControlModels(self):
+        # models for controls that are used in the logic need to be built outside the build_fn
+        # since that will only be called when the tab is selected and displayed
+
         sfc = self.sfc
-        smf = sfc.smf # noqa : F841
-        sff = sfc.sff # noqa : F841
-        print(f"SfcWindow.BuildWindow {type(sfc)}")
+        sff = sfc.sff
+
+        # sphereflake params
+        self._sf_radratio_slider_model = ui.SimpleFloatModel(sff.p_radratio)
+        idx = sff.GetGenModes().index(sff.p_genmode)
+        self._genmodebox_model = ui.SimpleIntModel(idx)
+        idx = sff.GetGenForms().index(sff.p_genform)
+        self._genformbox_model = ui.SimpleIntModel(idx)
+
+        # materials
+        matlist = sfc._matkeys
+        idx = matlist.index(sff.p_sf_matname)
+        self._sf_matbox_model = ui.SimpleIntModel(idx)
+        idx = matlist.index(sff.p_sf_alt_matname)
+        self._sf_alt_matbox_model = ui.SimpleIntModel(idx)
+        idx = matlist.index(sff.p_bb_matname)
+        self._bb_matbox_model = ui.SimpleIntModel(idx)
+        idx = matlist.index(sfc._current_floor_material_name)
+        self._sf_floor_matbox_model = ui.SimpleIntModel(idx)
+
+        # options
+        self.writelog_checkbox_model = ui.SimpleBoolModel(sfc.p_writelog)
+        self.writelog_seriesname_model = ui.SimpleStringModel(sfc.p_logseriesname)
+
+    def BuildWindow(self):
+        print("SfcWindow.BuildWindow  (trc)")
+        sfc = self.sfc
         with self.frame:
             with ui.VStack():
                 t1 = SfcTabMulti(self)
@@ -77,18 +123,25 @@ class SfcWindow(ui.Window):
                 ui.Button("Clear Primitives",
                           style={'background_color': self.darkyellow},
                           clicked_fn=lambda: sfc.on_click_clearprims())
-        self.dock_in_window("Property", ui._ui.DockPosition.SAME)
 
-    def GetSettings(self):
-        # print("SfcWindow.GetSettings")
+    def DockWindow(self, wintitle="Property"):
+        print(f"Docking to {wintitle} (trc)")
+        handle = ui._ui.Workspace.get_window(wintitle)
+        self.dock_in(handle, ui._ui.DockPosition.SAME)
+        self.deferred_dock_in(wintitle, ui._ui.DockPolicy.TARGET_WINDOW_IS_ACTIVE)
+
+    def LoadSettings(self):
+        # print("SfcWindow.LoadSettings")
         self.docollapse_prframe = get_setting("ui_pr_frame_collapsed", False)
         self.docollapse_drframe = get_setting("ui_dr_frame_collapsed", False)
         # print(f"docollapse_prframe: {self.docollapse_prframe} docollapse_drframe: {self.docollapse_drframe}")
 
     def SaveSettings(self):
         # print("SfcWindow.SaveSettings")
-        save_setting("ui_pr_frame_collapsed", self.prframe.collapsed)
-        save_setting("ui_dr_frame_collapsed", self.drframe.collapsed)
+        if (self.prframe is not None):
+            save_setting("ui_pr_frame_collapsed", self.prframe.collapsed)
+        if (self.drframe is not None):
+            save_setting("ui_dr_frame_collapsed", self.drframe.collapsed)
         # print(f"docollapse_prframe: {self.prframe.collapsed} docollapse_drframe: {self.drframe.collapsed}")
 
 
@@ -104,6 +157,7 @@ class SfcTabMulti(BaseTab):
         # print(f"SfcTabMulti.init {type(sfc)}")
 
     def build_fn(self):
+        print("SfcTabMulti.build_fn (trc)")
         sfw: SfcWindow = self.sfw
         sfc: SfControls = self.sfc
         sff: SphereFlakeFactory = self.sfw.sff
@@ -194,6 +248,7 @@ class SfcTabSphereFlake(BaseTab):
         self.sfc = sfw.sfc
 
     def build_fn(self):
+        print("SfcTabSphereFlake.build_fn (trc)")
         sfw = self.sfw
         sfc = self.sfc
         sff = self.sfw.sff
@@ -208,7 +263,7 @@ class SfcTabSphereFlake(BaseTab):
                                                   style={'background_color': sfw.darkred},
                                                   clicked_fn=lambda: sfc.on_click_sphereflake())
                     with ui.VStack(width=200):
-                        sfw._sf_depth_but = ui.Button(f"Depth:{sfc.sff.p_depth}",
+                        sfw._sf_depth_but = ui.Button(f"Depth:{sff.p_depth}",
                                                       style={'background_color': sfw.darkgreen},
                                                       mouse_pressed_fn= # noqa : E251
                                                       lambda x, y, b, m: sfc.on_click_sfdepth(x, y, b, m))
@@ -216,21 +271,23 @@ class SfcTabSphereFlake(BaseTab):
                             ui.Label("Radius Ratio: ",
                                      style={'background_color': sfw.darkgreen},
                                      width=50)
-                            sfw._sf_radratio_slider = ui.FloatSlider(min=0.0, max=1.0, step=0.01,
+                            sfw._sf_radratio_slider = ui.FloatSlider(model=sfw._sf_radratio_slider_model,
+                                                                     min=0.0, max=1.0, step=0.01,
                                                                      style={'background_color': sfw.darkblue}).model
-                            sfw._sf_radratio_slider.set_value(sff.p_radratio)
 
                         # SF Gen Mode Combo Box
                         with ui.HStack():
                             ui.Label("Gen Mode:")
-                            idx = sfc._sf_gen_modes.index(sfc._sf_gen_mode)
-                            sfw._genmodebox = ui.ComboBox(idx, *sfc._sf_gen_modes).model
+                            model = sfw._genmodebox_model
+                            idx = model.as_int
+                            sfw._genmodebox_model = ui.ComboBox(idx, *sff.GetGenModes()).model.get_item_value_model()
 
                         # SF Form Combo Box
                         with ui.HStack():
-                            ui.Label("Gen Form:")
-                            idx = sfc._sf_gen_forms.index(sfc._sf_gen_form)
-                            sfw._genformbox = ui.ComboBox(idx, *sfc._sf_gen_forms).model
+                            ui.Label("Gen Form1:")
+                            model = sfw._genformbox_model
+                            idx = model.as_int
+                            sfw._genformbox_model = ui.ComboBox(idx, *sff.GetGenForms()).model.get_item_value_model()
 
                     with ui.VStack():
                         sfw._sf_nlat_but = ui.Button(f"Nlat:{smf.p_nlat}",
@@ -254,6 +311,7 @@ class SfcTabShapes(BaseTab):
         self.sfc = sfw.sfc
 
     def build_fn(self):
+        print("SfcTabShapes.build_fn (trc)")
         sfc = self.sfc
         sfw = self.sfw
         # print(f"SfcTabShapes.build_fn {type(sfc)}")
@@ -280,6 +338,7 @@ class SfcTabMaterials(BaseTab):
         # print("SfcTabMaterials.build_fn {sfc}")
 
     def build_fn(self):
+        print("SfcTabMaterials.build_fn (trc)")
         sfw = self.sfw
         sfc = self.sfc
 
@@ -289,27 +348,32 @@ class SfcTabMaterials(BaseTab):
             with ui.HStack():
                 ui.Label("SF Material 1:")
                 idx = sfc._matkeys.index(sfc._current_material_name)
-                sfw._sf_matbox = ui.ComboBox(idx, *sfc._matkeys).model
+                sfw._sf_matbox = ui.ComboBox(idx, *sfc._matkeys)
+                sfw._sf_matbox_model = sfw._sf_matbox.model.get_item_value_model()
+
                 print("built sfw._sf_matbox")
 
             with ui.HStack():
                 ui.Label("SF Material 2:")
                 # use the alternate material name
                 idx = sfc._matkeys.index(sfc._current_alt_material_name)
-                sfw._sf_alt_matbox = ui.ComboBox(idx, *sfc._matkeys).model
+                sfw._sf_alt_matbox = ui.ComboBox(idx, *sfc._matkeys)
+                sfw._sf_alt_matbox_model = sfw._sf_alt_matbox.model.get_item_value_model()
                 print("built sfw._sf_matbox")
 
             # Bounds Material Combo Box
             with ui.HStack():
                 ui.Label("Bounds Material:")
                 idx = sfc._matkeys.index(sfc._current_bbox_material_name)
-                sfw._bb_matbox = ui.ComboBox(idx, *sfc._matkeys).model
+                sfw._bb_matbox = ui.ComboBox(idx, *sfc._matkeys)
+                sfw._bb_matbox_model = sfw._bb_matbox.model.get_item_value_model()
 
             # Bounds Material Combo Box
             with ui.HStack():
                 ui.Label("Floor Material:")
                 idx = sfc._matkeys.index(sfc._current_floor_material_name)
-                sfw._sf_floor_matbox = ui.ComboBox(idx, *sfc._matkeys).model
+                sfw._sf_floor_matbox = ui.ComboBox(idx, *sfc._matkeys)
+                sfw._sf_floor_matbox_model = sfw._sf_floor_matbox.model.get_item_value_model()
 
 
 class SfcTabOptions(BaseTab):
@@ -323,17 +387,16 @@ class SfcTabOptions(BaseTab):
         # print("SfcTabOptions.build_fn {sfc}")
 
     def build_fn(self):
+        print("SfcTabOptions.build_fn (trc)")
         sfw = self.sfw
         sfc = self.sfc # noqa : F841
 
         with ui.VStack(style={"margin": sfw.marg}):
             with ui.HStack():
                 ui.Label("Write Perf Log: ")
-                bmod = ui.SimpleBoolModel(sfc.p_writelog)
-                sfw.writelog_checkbox = ui.CheckBox(model=bmod, width=40, height=10, name="writelog", visible=True)
-                sfw.writelog_checkbox_model = sfw.writelog_checkbox.model
+                sfw.writelog_checkbox = ui.CheckBox(model=sfw.writelog_checkbox_model,
+                                                    width=40, height=10, name="writelog", visible=True)
             with ui.HStack():
                 ui.Label("Log Series Name:")
-                smod = ui.SimpleStringModel(sfc.p_logseriesname)
-                sfw.writelog_seriesname = ui.StringField(model=smod, value="Tag", width=200, height=20, visible=True)
-                sfw.writelog_seriesname_model = sfw.writelog_seriesname.model
+                sfw.writelog_seriesname = ui.StringField(model=sfw.writelog_seriesname_model,
+                                                         width=200, height=20, visible=True)

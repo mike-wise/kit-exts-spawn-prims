@@ -21,8 +21,8 @@ class SphereMeshFactoryV1():
     def GenPrep(self):
         pass
 
-    def GetSettings(self):
-        print("SphereMeshFactoryV1.GetSettings")
+    def LoadSettings(self):
+        print("SphereMeshFactoryV1.LoadSettings (trc)")
 
     def MakeMarker(self, name: str, matname: str, cenpt: Gf.Vec3f, rad: float):
         # print(f"MakeMarker {name}  {cenpt} {rad}")

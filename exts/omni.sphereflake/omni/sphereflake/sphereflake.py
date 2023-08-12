@@ -60,8 +60,8 @@ class SphereFlakeFactory():
         self._smf.GenPrep()
         pass
 
-    def GetSettings(self):
-        print("SphereFlakeFactory.GetSettings")
+    def LoadSettings(self):
+        print("SphereFlakeFactory.LoadSettings (trc)")
         self.p_genmode = get_setting("p_genmode", self.p_genmode)
         self.p_genform = get_setting("p_genform", self.p_genform)
         self.p_depth = get_setting("p_depth", self.p_depth)
@@ -86,10 +86,10 @@ class SphereFlakeFactory():
         self.p_bb_matname = get_setting("p_bb_matname", self.p_bb_matname)
         self.p_bb_matname = get_setting("p_bb_matname", self.p_bb_matname)
         self.p_make_bounds_visible = get_setting("p_make_bounds_visible", self.p_make_bounds_visible)
-        print(f"SphereFlakeFactory.GetSettings: p_nsfx:{self.p_nsfx} p_nsfy:{self.p_nsfy} p_nsfz:{self.p_nsfz}")
+        print(f"SphereFlakeFactory.LoadSettings: p_nsfx:{self.p_nsfx} p_nsfy:{self.p_nsfy} p_nsfz:{self.p_nsfz}")
 
     def SaveSettings(self):
-        print("SphereFlakeFactory.SaveSettings")
+        print("SphereFlakeFactory.SaveSettings (trc)")
         save_setting("p_genmode", self.p_genmode)
         save_setting("p_genform", self.p_genform)
         save_setting("p_depth", self.p_depth)
@@ -229,7 +229,7 @@ class SphereFlakeFactory():
         self._createlist = []
         self._bbcubelist = []
         tasks = []
-        doremote = True
+        doremote = False
         if doremote:
             baseurl = "http://localhost:8211/sphereflake/build-sf-set"
             sess = aiohttp.ClientSession()
